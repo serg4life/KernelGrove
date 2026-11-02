@@ -7,6 +7,6 @@ legacy.alias_env()
 
 from kernelgrove.main import main  # noqa: E402
 
-__version__ = "1.0b3"
+__version__ = "1.0b4"
 
 __all__ = ["__version__", main]

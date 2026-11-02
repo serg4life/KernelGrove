@@ -7,15 +7,21 @@ siguiente y nada más — la tabla la genera el script.
 
 ## Unreleased
 
+## v1.0b4
+
 ### Changed
 
-- **Licensed under the Apache License 2.0.** The source is public. **Help →
-  Licenses** shows the project's license and the third-party notices, and the
-  installers ship `LICENSE` and `NOTICE`.
-- Generating from the graph (the *Connections* section, the device palette,
-  editing the tree from the graph, the SoC panel) is **experimental**: on when
-  running from source, off in the packaged builds unless
-  `KERNELGROVE_EXPERIMENTAL=1` is set. Viewing the graph is unchanged.
+- **KernelGrove is open source**, under the Apache License 2.0. The code, the
+  build recipes and the release tooling live at
+  <https://github.com/serg4life/kernelgrove>, and so do the releases and the
+  bindings database from now on.
+- **Help → Licenses** shows the project's license and the third-party notices,
+  and the installers ship `LICENSE` and `NOTICE`. There is no agreement to
+  accept on first run any more.
+- For contributors: generating from the graph (the *Connections* section, the
+  device palette, editing the tree from the graph, the SoC panel) is
+  **experimental** — on when running from source, off in the packaged builds
+  unless `KERNELGROVE_EXPERIMENTAL=1` is set. Viewing the graph is unchanged.
 
 ## v1.0b3
 

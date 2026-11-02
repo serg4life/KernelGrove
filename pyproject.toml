@@ -1,6 +1,6 @@
 [project]
 name = "kernelgrove"
-version = "1.0b3"
+version = "1.0b4"
 description = "Device Tree Studio: a visual editor and semantic checker for Linux device trees"
 readme = "README.md"
 requires-python = ">=3.11"
