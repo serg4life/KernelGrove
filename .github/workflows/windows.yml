@@ -1,0 +1,69 @@
+# Construye el ejecutable y el instalador de Windows.
+#
+# PyInstaller no cross-compila y un contenedor Windows necesita un host
+# Windows, así que esto es lo que hace de máquina Windows del proyecto. No
+# corre en cada push: son ~200 MB de artefacto y solo hacen falta al publicar.
+#
+# Las URL de dtc/cpp salen de los secretos del repositorio; sin ellos el
+# instalador se compila igual y sale sin ese componente opcional (ver
+# packaging/windows/README.md).
+name: Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+# Para adjuntar el instalador a la release del tag.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[packaging]"
+
+      - name: Ejecutable
+        run: .\packaging\windows\build.ps1
+
+      - name: Instalador
+        # ISCC.exe viene en la imagen de GitHub; si algún día deja de venir,
+        # el script lo dice y se añade `choco install innosetup -y` aquí.
+        env:
+          KERNELGROVE_TOOLS_DTC_URL: ${{ secrets.KERNELGROVE_TOOLS_DTC_URL }}
+          KERNELGROVE_TOOLS_DTC_SHA256: ${{ secrets.KERNELGROVE_TOOLS_DTC_SHA256 }}
+          KERNELGROVE_TOOLS_CPP_URL: ${{ secrets.KERNELGROVE_TOOLS_CPP_URL }}
+          KERNELGROVE_TOOLS_CPP_SHA256: ${{ secrets.KERNELGROVE_TOOLS_CPP_SHA256 }}
+        run: .\packaging\windows\build_installer.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kernelgrove-windows
+          path: dist/kernelgrove-*-win64-setup.exe
+
+      - name: Adjuntar a la release
+        # Con un tag `v*` el instalador va a la release de ese tag, en este
+        # mismo repositorio. Si `scripts/publish_release.sh` todavía no la ha
+        # creado, se crea aquí **como borrador**: publicada, pasaría a ser la
+        # «latest» sin `manifest.json`, y las copias instaladas que buscan la
+        # base en `releases/latest/download/manifest.json` no la encontrarían.
+        # La publica `publish_release.sh` en cuanto sube el manifiesto.
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" -t "$TAG" --notes "" --draft
+          gh release upload "$TAG" --clobber dist/kernelgrove-*-win64-setup.exe

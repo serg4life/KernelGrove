@@ -1,0 +1,98 @@
+[project]
+name = "kernelgrove"
+version = "1.0b3"
+description = "Device Tree Studio: a visual editor and semantic checker for Linux device trees"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Sergio Fernandez" }]
+keywords = ["device-tree", "dts", "linux", "kernel", "embedded", "dtc"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Embedded Systems",
+]
+
+dependencies = [
+    "PySide6>=6.6",
+    # Validación de valores contra los schemas de binding (capas 2 y 5 del
+    # motor). 4.18 es la primera versión con `referencing`, que es como se
+    # resuelven los `$ref` entre schemas sin tocar el disco.
+    "jsonschema>=4.18",
+]
+
+# Solo hacen falta para *construir* la base de datos, nunca para ejecutar la
+# aplicación: `dtschema` procesa los bindings del kernel (tabla `schemas`) y
+# el mínimo de versión es el mismo que exige el propio kernel en
+# Documentation/devicetree/bindings/Makefile. `pyyaml` no lo usa nada fuera
+# de `db_manager` (comprobado: ningún import de `yaml` en `api`/`gui`/
+# `dts_engine`), así que vive aquí y no en las dependencias base — la app
+# empaquetada no debe arrastrar la herramienta de ingesta ni lo que ella
+# necesita (ver CLAUDE.md, "db_manager no se empaqueta").
+[project.optional-dependencies]
+ingest = [
+    "dtschema>=2023.9",
+    "pyyaml>=6.0",
+]
+# Solo hace falta para construir el ejecutable (ver packaging/linux/ y
+# packaging/windows/; el instalador de Windows lo hace Inno Setup, que no es
+# un paquete de Python y por eso no está aquí).
+packaging = [
+    "pyinstaller>=6.0",
+]
+
+[build-system]
+# 77 es la primera que entiende `license` como expresión SPDX (PEP 639).
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+# Las traducciones compiladas viajan dentro del paquete: `gui/translations.py`
+# las busca junto al propio módulo. Los `.ts` (el fuente que se edita con Qt
+# Linguist) no hacen falta en la instalación, solo los `.qm`.
+#
+# Las fuentes también: la Inter va empaquetada (SIL Open Font License 1.1,
+# su texto en `gui/fonts/OFL.txt`, que la licencia obliga a distribuir con
+# ella) en vez de enlazarse desde Google Fonts — esto es una aplicación de
+# escritorio y no puede depender de que haya red para verse bien.
+[tool.setuptools.package-data]
+# `LICENSES.md` es lo que enseña «Ayuda → Licencias» (`widgets/legal_dialog`).
+"kernelgrove.gui" = [
+    "translations/*.qm", "fonts/*.ttf", "fonts/OFL.txt", "brand/*.svg", "LICENSES.md",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 88
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.scripts]
+kernelgrove = "kernelgrove.main:main"
+
+[project.urls]
+Homepage = "https://github.com/serg4life/kernelgrove"
+Issues = "https://github.com/serg4life/kernelgrove/issues"
+Releases = "https://github.com/serg4life/kernelgrove/releases"
+
+[tool.ruff]
+# Reglas a activar
+lint.select = ["E", "W", "F", "N"]  # E: errores PEP8, W: advertencias, F: errores de lógica, N: nombres
+
+# Carpetas o archivos a excluir
+exclude = ["venv", ".git", "__pycache__"]
+
+# Qt impone camelCase al sobrescribir su API (rowCount, setData, createEditor...),
+# así que en la GUI no se puede cumplir la convención de nombres de PEP8.
+[tool.ruff.lint.per-file-ignores]
+"src/kernelgrove/gui/**" = ["N802", "N815"]

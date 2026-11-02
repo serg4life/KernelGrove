@@ -1,0 +1,44 @@
+# Lint y pruebas en cada push y cada pull request.
+#
+# No hay base de datos en CI (`database/bindings.db` no se versiona: son 70 MB
+# derivados de un checkout del kernel), así que las pruebas que la necesitan se
+# saltan solas — está previsto en cada una de ellas. Lo que sí corre entero es
+# el motor semántico, que no toca SQLite por diseño.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Librerías nativas de Qt
+        # PySide6 enlaza con EGL aunque se use el backend `offscreen`, y la
+        # imagen de GitHub no las trae: sin esto, importar PySide6 falla.
+        run: sudo apt-get update && sudo apt-get install -y libegl1
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install ruff pytest
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Pruebas
+        # Sin pantalla: es el mismo modo con el que se puede usar la GUI en un
+        # contenedor.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest -q

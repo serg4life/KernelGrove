@@ -1,0 +1,56 @@
+name: Bug report
+description: Something does not work, crashes, or a diagnostic is wrong.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The smaller the example, the
+        faster it gets fixed.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem is it?
+      options:
+        - Wrong diagnostic (false positive)
+        - Missing diagnostic (false negative)
+        - Crash or error message
+        - GUI behaviour
+        - Packaging / installation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: |
+        Steps, and for a diagnostic the smallest `.dts`/`.dtsi` that triggers
+        it (or the path of the upstream kernel file) plus the diagnostic code.
+      render: dts
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: KernelGrove version
+      description: Shown in Help → About.
+      placeholder: 1.0b3
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Ubuntu 24.04 / Windows 11 / running from source
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or traceback
+      render: text

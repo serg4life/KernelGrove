@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=KernelGrove
+GenericName=Device Tree Studio
+Comment=Visual editor and generator for Linux Device Trees
+Exec=kernelgrove
+Icon=kernelgrove
+Terminal=false
+Categories=Development;IDE;Electronics;
+Keywords=devicetree;dts;dtsi;dtbo;overlay;kernel;embedded;
+StartupNotify=true
+StartupWMClass=KernelGrove

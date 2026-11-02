@@ -1,0 +1,47 @@
+# EditorConfig para proyectos Python
+root = true
+
+# Configuración general para todos los archivos
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Configuración específica para Python
+[*.py]
+indent_style = space
+indent_size = 4
+max_line_length = 88  # Compatible con Black
+# Evitar espacios al final de líneas en Python
+trim_trailing_whitespace = true
+
+# Configuración para archivos Markdown, reStructuredText, y documentación
+[*.md]
+trim_trailing_whitespace = false
+insert_final_newline = true
+
+[*.rst]
+trim_trailing_whitespace = false
+insert_final_newline = true
+
+# Configuración para JSON, YAML y TOML
+[*.json]
+indent_style = space
+indent_size = 2
+
+[*.yml]
+indent_style = space
+indent_size = 2
+
+[*.toml]
+indent_style = space
+indent_size = 2
+
+# Configuración para scripts de shell
+[*.sh]
+indent_style = space
+indent_size = 2
+end_of_line = lf

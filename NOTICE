@@ -1,0 +1,16 @@
+KernelGrove — Device Tree Studio
+Copyright 2026 Sergio Fernandez and the KernelGrove contributors
+
+This product includes software developed as part of the KernelGrove project:
+https://github.com/serg4life/kernelgrove
+
+Licensed under the Apache License, Version 2.0 (see LICENSE). Under section
+4(d) of the License, any redistribution or derivative work, commercial or
+not, must carry the attribution in this NOTICE file — as a NOTICE file, in
+its documentation, or wherever its third-party notices normally appear.
+
+Third-party components bundled with the application (Qt/PySide6, the Inter
+font, jsonschema and its dependencies, Python) keep their own licenses; they
+are listed in src/kernelgrove/gui/LICENSES.md and in Help → Licenses. Files
+copied from the Linux kernel (tests/fixtures/) keep the license stated in
+their SPDX header.

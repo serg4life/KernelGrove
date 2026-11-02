@@ -1,0 +1,16 @@
+node_modules/
+.env
+dist/
+build/
+__pycache__/
+.DS_Store
+*.db
+.venv/
+kernel/
+.pytest_cache/
+.vscode/
+database/*.json
+*.egg-info
+.ruff_cache
+.claude/
+.obsidian/

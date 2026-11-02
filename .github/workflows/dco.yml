@@ -1,0 +1,35 @@
+# Cada commit de un pull request tiene que llevar `Signed-off-by` con el mismo
+# correo que su autor: es el Developer Certificate of Origin (ver
+# CONTRIBUTING.md). Un workflow y no la app de DCO para que la regla viva en el
+# propio repositorio y no dependa de instalar nada en la organización.
+name: DCO
+
+on:
+  pull_request:
+
+jobs:
+  signoff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check Signed-off-by
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          fallos=0
+          for commit in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            correo=$(git log -1 --format='%ae' "$commit")
+            if ! git log -1 --format='%(trailers:key=Signed-off-by,valueonly)' "$commit" \
+                | grep -qiF "<$correo>"; then
+              echo "::error::$(git log -1 --format='%h %s' "$commit") is missing 'Signed-off-by' for <$correo>"
+              fallos=1
+            fi
+          done
+          if [ "$fallos" -ne 0 ]; then
+            echo "Sign your commits with 'git commit -s' (or 'git rebase --signoff' onto the base branch) and push again. See CONTRIBUTING.md."
+          fi
+          exit "$fallos"
