@@ -1,7 +1,7 @@
-# Cada commit de un pull request tiene que llevar `Signed-off-by` con el mismo
-# correo que su autor: es el Developer Certificate of Origin (ver
-# CONTRIBUTING.md). Un workflow y no la app de DCO para que la regla viva en el
-# propio repositorio y no dependa de instalar nada en la organización.
+# Every commit in a pull request has to carry `Signed-off-by` with the same
+# email as its author: that is the Developer Certificate of Origin (see
+# CONTRIBUTING.md). A workflow rather than the DCO app, so the rule lives in
+# the repository itself and does not depend on installing anything in the org.
 name: DCO
 
 on:

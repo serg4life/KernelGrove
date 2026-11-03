@@ -1,119 +1,118 @@
-# Empaquetado en Linux
+# Packaging on Linux
 
-## Construir
+## Build
 
 ```
 pip install -e '.[packaging]'      # PyInstaller
 bash packaging/linux/build.sh
 ```
 
-Resultado en `dist/kernelgrove/` — un directorio con el ejecutable `kernelgrove` y sus
-librerías al lado (`--onedir`, no `--onefile`, ver el porqué en
-`kernelgrove.spec`). Probarlo:
+The result lands in `dist/kernelgrove/` — a directory with the `kernelgrove`
+executable and its libraries alongside (`--onedir`, not `--onefile`; see why in
+`kernelgrove.spec`). To try it:
 
 ```
-KERNELGROVE_DB_PATH=/ruta/a/bindings.db dist/kernelgrove/kernelgrove
+KERNELGROVE_DB_PATH=/path/to/bindings.db dist/kernelgrove/kernelgrove
 ```
 
-## Instalar (`.deb`)
+## Install (`.deb`)
 
 ```
 bash packaging/linux/build_deb.sh
 sudo apt install ./dist/kernelgrove_<version>_<arch>.deb
 ```
 
-Empaqueta el `dist/kernelgrove/` que acaba de construirse — sin compilar nada,
-solo metadatos, el `.desktop` y el icono, que es lo que lo convierte en algo
-que aparece en el menú de aplicaciones y que `apt remove` se lleva limpio.
-Con `dpkg-deb` y no con `fpm` (que es lo que apuntaba `docs/ROADMAP.md`):
-`fpm` es una gema de Ruby que habría que instalar, y `dpkg-deb` viene en
-cualquier Debian/Ubuntu, que es exactamente donde se construye un `.deb`.
+It packages the `dist/kernelgrove/` that was just built — compiling nothing,
+only metadata, the `.desktop` and the icon, which is what turns it into
+something that shows up in the applications menu and that `apt remove` cleans
+up completely. With `dpkg-deb` and not `fpm` (which is what `docs/ROADMAP.md`
+had noted): `fpm` is a Ruby gem that would have to be installed, and
+`dpkg-deb` ships with every Debian/Ubuntu, which is exactly where a `.deb` is
+built.
 
-Qué instala:
+What it installs:
 
-| Ruta | Qué |
+| Path | What |
 |---|---|
-| `/opt/kernelgrove/` | el bundle entero de PyInstaller |
-| `/usr/bin/kernelgrove` | enlace al ejecutable |
-| `/usr/share/applications/kernelgrove.desktop` | lanzador del menú |
-| `/usr/share/icons/hicolor/scalable/apps/kernelgrove.svg` | el símbolo de la marca |
+| `/opt/kernelgrove/` | the whole PyInstaller bundle |
+| `/usr/bin/kernelgrove` | a link to the executable |
+| `/usr/share/applications/kernelgrove.desktop` | the menu launcher |
+| `/usr/share/icons/hicolor/scalable/apps/kernelgrove.svg` | the brand mark |
 
-**El icono de la ventana lo pone esta entrada, no la aplicación.** GNOME no
-usa el icono que la ventana lleva dentro (`_NET_WM_ICON`, que Qt sí rellena
-desde `app.setWindowIcon`): asocia la ventana a un `.desktop` por el
-identificador que declara (`QApplication.setDesktopFileName`, «kernelgrove») y
-de ahí saca el icono. Sin la entrada instalada lo que se ve es el
-`application-x-executable` del tema — en Yaru, un engranaje. De ahí que el
-nombre del fichero (`kernelgrove.desktop`), el `Icon=` (`kernelgrove`, que resuelve
-contra `hicolor`) y el identificador de la aplicación tengan que coincidir:
-si se cambia uno hay que cambiar los tres. Para ejecutar desde el
-repositorio, `scripts/install_desktop_entry.sh` instala el equivalente en
-`~/.local` sin sudo.
+**The window icon comes from this entry, not from the application.** GNOME
+does not use the icon the window carries (`_NET_WM_ICON`, which Qt does fill
+from `app.setWindowIcon`): it associates the window with a `.desktop` through
+the identifier it declares (`QApplication.setDesktopFileName`, «kernelgrove»)
+and takes the icon from there. Without the entry installed, what shows is the
+theme's `application-x-executable` — in Yaru, a gear. That is why the file
+name (`kernelgrove.desktop`), the `Icon=` (`kernelgrove`, which resolves
+against `hicolor`) and the application identifier have to match: change one
+and you have to change all three. To run from the repository,
+`scripts/install_desktop_entry.sh` installs the equivalent into `~/.local`
+without sudo.
 
-Declara `Depends: libxcb-cursor0` — es la librería de sistema que Qt ≥6.5
-necesita para el plugin `xcb` y que la aplicación comprueba a mano al
-arrancar (`main._missing_xcb_runtime_deps`); como dependencia del paquete,
-esa comprobación no llega a hacer falta.
+It declares `Depends: libxcb-cursor0` — the system library Qt ≥6.5 needs for
+the `xcb` plugin and that the application checks for by hand at start-up
+(`main._missing_xcb_runtime_deps`); as a package dependency, that check never
+gets to be needed.
 
-Y `Recommends: device-tree-compiler, cpp`, que son las dos herramientas con
-las que se compilan y descompilan overlays (`api/toolchain.py`). En
-`Recommends` y no en `Depends` a propósito: `apt` las instala por defecto,
-así que compilar funciona nada más instalar, pero todo lo demás funciona sin
-ellas y el programa ya detecta cuáles hay y explica la que falte. No se
-empaquetan ni se descargan nunca — son paquetes de la distribución, con sus
-propias actualizaciones de seguridad, y traerlas dentro sería hacerse cargo
-de parchearlas.
+And `Recommends: device-tree-compiler, cpp`, the two tools overlays are
+compiled and decompiled with (`api/toolchain.py`). In `Recommends` and not in
+`Depends` on purpose: `apt` installs them by default, so compiling works right
+after installing, but everything else works without them and the program
+already detects which ones are there and explains whichever is missing. They
+are never bundled or downloaded — they are distribution packages, with their
+own security updates, and bringing them inside would mean taking on patching
+them.
 
-Un `.deb` por arquitectura: empaqueta un `dist/` que PyInstaller construyó
-para la máquina donde se lanzó.
+One `.deb` per architecture: it packages a `dist/` that PyInstaller built for
+the machine it was run on.
 
-**La base de datos no va dentro** (ver más abajo). Instalada en `/opt`, que
-es de root, dejarla junto al ejecutable exigiría `sudo` para un fichero que
-es del usuario, así que `main._default_db_path` la busca también en
-`~/.kernelgrove/bindings.db`. Si no está en ninguno de los dos, la aplicación lo
-dice **en un cuadro de diálogo**: lanzada desde el menú no hay terminal donde
-leer un mensaje de consola, y pulsar el icono parecía no hacer nada.
+**The database does not go inside** (see below). Installed in `/opt`, which
+belongs to root, keeping it next to the executable would require `sudo` for a
+file that belongs to the user, so `main._default_db_path` also looks for it in
+`~/.kernelgrove/bindings.db`. When something goes wrong there, the
+application says so **in a dialog**: launched from the menu there is no
+terminal to read a console message in, and clicking the icon seemed to do
+nothing.
 
-Antes de publicar conviene revisar el correo del mantenedor
-(`KERNELGROVE_DEB_MAINTAINER`). El `copyright` del paquete es el `NOTICE` y la
-`LICENSE` del repositorio, que Apache-2.0 obliga a llevar en cualquier
-redistribución.
+Before publishing, check the maintainer address
+(`KERNELGROVE_DEB_MAINTAINER`). The package's `copyright` is the repository's
+`NOTICE` and `LICENSE`, which Apache-2.0 requires in any redistribution.
 
-## Qué NO lleva dentro, y por qué
+## What it does NOT carry, and why
 
-- **`bindings.db`**: la base de datos es un artefacto independiente del
-  software (y eso condiciona además cómo
-  se trata el contenido derivado del kernel Linux que contiene, GPL-2.0 y
-  BSD-2-Clause mezclados según fichero). El ejecutable la busca junto a sí
-  mismo por defecto, o donde diga `KERNELGROVE_DB_PATH` — nunca la genera ni la
-  incluye el propio build.
-- **`kernelgrove.db_manager`** (la herramienta de ingesta) **ni `dtschema`/`pyyaml`**:
-  excluidos explícitamente en `kernelgrove.spec` (`excludes=[...]`), y ya
-  verificado que ningún import real los alcanza desde `gui`/`api`/
-  `dts_engine` — la exclusión es cinturón y tirantes, no la única barrera.
+- **`bindings.db`**: the database is an artifact independent of the software
+  (which also shapes how the Linux-kernel-derived content it holds is treated
+  — GPL-2.0 and BSD-2-Clause mixed, depending on the file). By default the
+  executable looks for it next to itself, or wherever `KERNELGROVE_DB_PATH`
+  says — the build itself never generates nor includes it.
+- **`kernelgrove.db_manager`** (the ingestion tool) **nor `dtschema`/`pyyaml`**:
+  explicitly excluded in `kernelgrove.spec` (`excludes=[...]`), and it has
+  already been verified that no real import reaches them from `gui`/`api`/
+  `dts_engine` — the exclusion is belt and braces, not the only barrier.
 
-## Cumplimiento LGPL de Qt
+## Qt LGPL compliance
 
-PySide6/Qt se distribuye bajo LGPLv3 entre otras opciones. `--onedir` deja
-sus librerías como ficheros `.so` sueltos en `dist/kernelgrove/_internal/`, no
-comprimidas dentro de un binario único — así un usuario puede sustituirlas,
-que es la condición de LGPL para uso en software propietario. No cambiar a
-`--onefile` sin revisar esa condición de nuevo.
+PySide6/Qt is distributed under LGPLv3, among other options. `--onedir` leaves
+its libraries as loose `.so` files in `dist/kernelgrove/_internal/`, not
+compressed inside a single binary — that way a user can replace them, which
+is LGPL's condition for shipping it inside an application under a different
+licence. Do not switch to `--onefile` without reviewing that condition again.
 
-## Otras plataformas
+## Other platforms
 
-Este directorio es Linux x86_64 únicamente — PyInstaller no hace
-cross-compiling. Para ARM64, Windows y sus instaladores, ver el plan en
-`docs/ROADMAP.md`.
+This directory is Linux x86_64 only — PyInstaller does not cross-compile. For
+ARM64, Windows and their installers, see the plan in `docs/ROADMAP.md`.
 
-## Pendiente (no implementado en este pase)
+## Pending (not implemented in this pass)
 
-- **AppImage**: envolver `dist/kernelgrove/` con `linuxdeploy` +
-  `linuxdeploy-plugin-qt` para un único fichero ejecutable sin instalación.
-  No incluido aquí porque requiere descargar esas herramientas y no se pudo
-  validar en este entorno — el `--onedir` de arriba ya es un Linux
-  funcional, el AppImage es solo un envoltorio de distribución encima.
-- **Firma/notarización**: no aplica en Linux como en Windows, pero conviene
-  publicar sumas SHA256 de cada release.
-- **CI**: automatizar este script en GitHub Actions (`ubuntu-latest`) por
-  cada tag, para no depender de una máquina concreta.
+- **AppImage**: wrap `dist/kernelgrove/` with `linuxdeploy` +
+  `linuxdeploy-plugin-qt` for a single executable file with no installation.
+  Not included here because it requires downloading those tools and could not
+  be validated in this environment — the `--onedir` above is already a working
+  Linux build, the AppImage is only a distribution wrapper on top.
+- **Signing/notarization**: does not apply on Linux the way it does on
+  Windows, but publishing SHA256 sums for each release is worthwhile.
+- **CI**: automate this script in GitHub Actions (`ubuntu-latest`) on each
+  tag, so as not to depend on one particular machine.

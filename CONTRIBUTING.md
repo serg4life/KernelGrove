@@ -85,6 +85,8 @@ approach.
   switching (`translations.Retranslates`).
 - **Diagnostics and messages from `dts_engine`/`api` are plain English
   strings** (those layers have no Qt to translate with).
+- **Documentation is English**: `docs/`, READMEs, the changelog and workflow
+  comments.
 - **Comments and docstrings are mostly in Spanish**, which is how the codebase
   was written. Match the language of the file you are editing; English is fine
   in new files.

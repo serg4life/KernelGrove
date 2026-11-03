@@ -1,6 +1,6 @@
-# Ingestión: del kernel a bindings.db
+# Ingestion: from the kernel to bindings.db
 
-> Detalle extraído de `CLAUDE.md`. El índice y las reglas transversales siguen allí.
+> Detail split out of `CLAUDE.md`. The index and the cross-cutting rules stay there.
 
 **1. Ingestion (offline, builds the knowledge base).** `kernelgrove/db_manager/` turns the kernel's `Documentation/devicetree/bindings/*.yaml` schemas into a queryable DB:
 `finders.py` (walk for `*.yaml`/`*.yml`) → `loader.py` (parse YAML) → `records.py` (extract `compatible`/`vendor`/`title`, dropping anything that fails `is_valid_compatible`) → `storage.py` (write JSON + create/populate SQLite `bindings` and `socs` tables). Orchestrated by `db_manager/main.py`. During insert, `storage.py` derives `subsystem` from the file path and infers the two bus dimensions.
@@ -23,7 +23,7 @@ Storing uses `INSERT OR REPLACE`, which updates rows but never deletes ones that
 
 **2. Editor/generator (interactive).** SoC row in the `socs` table (a catalogue entry: identity plus `file_path`, the key of its source in `sources`) → the source is opened in the editor and parsed → `api/soc_loader.py` keeps only the **controller** nodes of that tree (those the DB gives a `child_bus`, plus names in `CONTROLLER_LIST`) → the PySide6 GUI shows one row per controller with a dropdown of the devices that can hang off its bus → `api/selection.py` assembles an `InternalDeviceTreeModel` exportable to JSON. A tree parsed in the editor can feed the generator directly (`soc_profile_from_tree`) — including a file opened from disk (`_open_explorer_file` → `EditorTab.open_source` → `send_to_generator`), which never touches the DB. `KernelGroveService.load_soc_profile_from_file`/`soc_profile_from_source` were deleted as dead code (nothing called them once that editor-first flow existed); use `soc_profile_from_tree` on an already-parsed tree instead.
 
-## Trampas de la ingestión y del esquema de la BD
+## Ingestion and DB-schema traps
 
 - `db_manager` no longer contains a parser: the pure DTS parsing moved to `dts_engine/parser.py` and the old DB-aware `extract_peripherals`/`build_soc_profile` were deleted (they dropped the `child_bus` the DB reported, making every node look like a leaf). `api/soc_loader.extract_connectable_nodes` is the correct replacement. `db_manager` now imports `dts_engine.parser` for socs ingestion — that direction is intentional; never make `dts_engine` depend on `db_manager` or `api`.
 - `bindings.compatible` only stores each binding's *first* compatible, so the `binding_compatibles` table maps every declared compatible (~25.4k) to its binding. Resolve through it, or valid compatibles like `cdns,i2c-r1p14` look unknown. It only holds the compatibles a binding declares for **its own node**; the ones declared by sub-nodes (`ti,twl4030-pwm`, `fsl,sec-v4.0-job-ring` — 763 of them) live in `schema_compatibles` with the path of the node that declares them, because resolving them to the parent binding would attribute the parent's requirements to a child device.

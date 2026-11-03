@@ -1,26 +1,26 @@
-# Tipos de nodos y bindings en Device Tree
+# Node types and bindings in the Device Tree
 
-## Introducción
+## Introduction
 
-Un nodo del Device Tree **no representa necesariamente un periférico**. Su objetivo es describir cualquier elemento del hardware que el kernel necesite conocer para inicializar correctamente la plataforma.
+A Device Tree node **does not necessarily represent a peripheral**. Its purpose is to describe any element of the hardware the kernel needs to know about to initialise the platform correctly.
 
-Dependiendo de su función, un nodo puede representar un dispositivo final, un proveedor de recursos, un controlador de bus o simplemente información descriptiva del hardware.
+Depending on its function, a node can represent an end device, a resource provider, a bus controller, or simply descriptive information about the hardware.
 
 ---
 
-# 1. Periféricos
+# 1. Peripherals
 
-## Propósito
+## Purpose
 
-Representan dispositivos hardware finales que realizan una función concreta (UART, SPI, Ethernet, USB, PWM, etc.).
+They represent end hardware devices that perform a specific function (UART, SPI, Ethernet, USB, PWM, etc.).
 
-## Características
+## Characteristics
 
-- Tienen un driver asociado.
-- El kernel crea un `platform_device` (o un dispositivo del bus correspondiente).
-- El driver realiza el `probe()` utilizando la información del Device Tree.
+- They have an associated driver.
+- The kernel creates a `platform_device` (or a device on the corresponding bus).
+- The driver performs its `probe()` using the information in the Device Tree.
 
-## Ejemplos
+## Examples
 
 - UART
 - SPI Controller
@@ -32,21 +32,21 @@ Representan dispositivos hardware finales que realizan una función concreta (UA
 
 ---
 
-# 2. Controladores de bus
+# 2. Bus controllers
 
-## Propósito
+## Purpose
 
-Representan un bus físico al que pueden conectarse otros dispositivos.
+They represent a physical bus other devices can be connected to.
 
-No describen los dispositivos hijos, sino el controlador que administra dicho bus.
+They do not describe the child devices, but the controller that manages that bus.
 
-## Características
+## Characteristics
 
-- Tienen driver.
-- Descubren los nodos hijos.
-- Crean dinámicamente los dispositivos conectados al bus.
+- They have a driver.
+- They discover the child nodes.
+- They dynamically create the devices connected to the bus.
 
-## Ejemplos
+## Examples
 
 - I²C Controller
 - SPI Controller
@@ -56,27 +56,27 @@ No describen los dispositivos hijos, sino el controlador que administra dicho bu
 
 ---
 
-# 3. Proveedores de recursos (Resource Providers)
+# 3. Resource providers
 
-## Propósito
+## Purpose
 
-Proporcionan recursos compartidos que utilizan otros dispositivos.
+They provide shared resources used by other devices.
 
-No suelen ser dispositivos finales.
+They are not usually end devices.
 
-## Características
+## Characteristics
 
-- Implementan un framework del kernel.
-- Otros nodos hacen referencia a ellos mediante phandles.
-- Exportan un servicio al resto del sistema.
+- They implement a kernel framework.
+- Other nodes refer to them through phandles.
+- They export a service to the rest of the system.
 
-Los principales proveedores son:
+The main providers are:
 
 ### 3.1 Clock Controllers
 
-Proporcionan relojes a otros dispositivos.
+They provide clocks to other devices.
 
-Propiedad utilizada por los consumidores:
+Property used by consumers:
 
 ```dts
 clocks = <&clk>;
@@ -90,9 +90,9 @@ Framework:
 
 ### 3.2 Reset Controllers
 
-Permiten reiniciar dispositivos hardware.
+They allow hardware devices to be reset.
 
-Propiedad:
+Property:
 
 ```dts
 resets = <&rst>;
@@ -106,9 +106,9 @@ Framework:
 
 ### 3.3 GPIO Controllers
 
-Exportan líneas GPIO que pueden ser utilizadas por otros dispositivos.
+They export GPIO lines that other devices can use.
 
-Propiedad:
+Property:
 
 ```dts
 reset-gpios = <&gpio0 5 GPIO_ACTIVE_LOW>;
@@ -122,9 +122,9 @@ Framework:
 
 ### 3.4 Regulators
 
-Describen fuentes de alimentación.
+They describe power supplies.
 
-Propiedad:
+Property:
 
 ```dts
 vdd-supply = <&reg_3v3>;
@@ -138,9 +138,9 @@ Framework:
 
 ### 3.5 Interrupt Controllers
 
-Gestionan interrupciones hardware.
+They manage hardware interrupts.
 
-Propiedad:
+Property:
 
 ```dts
 interrupt-parent = <&gic>;
@@ -154,9 +154,9 @@ Framework:
 
 ### 3.6 DMA Controllers
 
-Proporcionan canales DMA.
+They provide DMA channels.
 
-Propiedad:
+Property:
 
 ```dts
 dmas = <&dma0 3>;
@@ -170,9 +170,9 @@ Framework:
 
 ### 3.7 PHY
 
-Representan la capa física de interfaces como USB, Ethernet, SATA o PCIe.
+They represent the physical layer of interfaces such as USB, Ethernet, SATA or PCIe.
 
-Propiedad:
+Property:
 
 ```dts
 phys = <&usb_phy>;
@@ -186,9 +186,9 @@ Framework:
 
 ### 3.8 Power Domains
 
-Controlan el encendido y apagado de bloques hardware.
+They control powering hardware blocks on and off.
 
-Propiedad:
+Property:
 
 ```dts
 power-domains = <&pd>;
@@ -202,9 +202,9 @@ Framework:
 
 ### 3.9 IOMMU
 
-Describen una unidad de gestión de memoria para dispositivos DMA.
+They describe a memory management unit for DMA devices.
 
-Propiedad:
+Property:
 
 ```dts
 iommus = <&smmu>;
@@ -216,28 +216,28 @@ Framework:
 
 ---
 
-# 4. Nodos descriptivos
+# 4. Descriptive nodes
 
-## Propósito
+## Purpose
 
-Describen características de la plataforma, pero no representan dispositivos controlables.
+They describe characteristics of the platform, but do not represent controllable devices.
 
-Normalmente no tienen driver.
+They usually have no driver.
 
 ---
 
 ## 4.1 CPU
 
-Describe los procesadores presentes.
+Describes the processors present.
 
-Información típica:
+Typical information:
 
-- tipo de CPU
-- método de arranque
-- topología
-- cachés
+- CPU type
+- boot method
+- topology
+- caches
 
-Utilizado por:
+Used by:
 
 - Scheduler
 - SMP
@@ -248,14 +248,14 @@ Utilizado por:
 
 ## 4.2 Memory
 
-Describe la memoria RAM disponible.
+Describes the available RAM.
 
-Información:
+Information:
 
-- dirección base
-- tamaño
+- base address
+- size
 
-Utilizado por:
+Used by:
 
 - Memory Manager
 
@@ -263,38 +263,38 @@ Utilizado por:
 
 ## 4.3 Reserved Memory
 
-Describe regiones de memoria que el kernel no debe utilizar libremente.
+Describes memory regions the kernel must not use freely.
 
-Ejemplos:
+Examples:
 
 - Firmware
-- Buffers DMA
+- DMA buffers
 - Framebuffers
 - Secure Memory
 
 ---
 
-# 5. Nodos organizativos
+# 5. Organisational nodes
 
-## Propósito
+## Purpose
 
-Sirven únicamente para organizar el árbol.
+They only serve to organise the tree.
 
-No representan hardware.
+They do not represent hardware.
 
-No tienen driver.
+They have no driver.
 
-## Ejemplos
+## Examples
 
 ### soc
 
-Agrupa todos los periféricos integrados en el SoC.
+Groups all the peripherals integrated in the SoC.
 
 ### aliases
 
-Define nombres cortos.
+Defines short names.
 
-Ejemplo:
+Example:
 
 ```dts
 serial0 = &uart0;
@@ -304,9 +304,9 @@ serial0 = &uart0;
 
 ### chosen
 
-Comunica información al kernel durante el arranque.
+Passes information to the kernel at boot.
 
-Ejemplos:
+Examples:
 
 - bootargs
 - stdout-path
@@ -316,25 +316,25 @@ Ejemplos:
 
 ### firmware
 
-Describe interfaces proporcionadas por el firmware.
+Describes interfaces provided by the firmware.
 
 ---
 
-# 6. Nodos auxiliares
+# 6. Auxiliary nodes
 
-## Propósito
+## Purpose
 
-Definen configuraciones utilizadas por otros dispositivos.
+They define configurations used by other devices.
 
-No suelen tener driver propio.
+They do not usually have a driver of their own.
 
 ---
 
 ## 6.1 Pin Configuration
 
-Describe configuraciones de multiplexación y parámetros eléctricos.
+Describes multiplexing configurations and electrical parameters.
 
-Utilizado mediante:
+Used through:
 
 ```dts
 pinctrl-0 = <&uart0_pins>;
@@ -344,14 +344,14 @@ pinctrl-0 = <&uart0_pins>;
 
 ## 6.2 OPP Tables
 
-Definen Operating Performance Points.
+They define Operating Performance Points.
 
-Asocian:
+They associate:
 
-- frecuencia
-- voltaje
+- frequency
+- voltage
 
-Utilizadas por:
+Used by:
 
 - CPUFreq
 - Devfreq
@@ -360,9 +360,9 @@ Utilizadas por:
 
 ## 6.3 Thermal Zones
 
-Describen sensores y políticas térmicas.
+They describe sensors and thermal policies.
 
-Utilizadas por:
+Used by:
 
 - Thermal Framework
 
@@ -370,24 +370,24 @@ Utilizadas por:
 
 ## 6.4 Graph Endpoints
 
-Describen conexiones entre dispositivos multimedia.
+They describe connections between multimedia devices.
 
-Muy utilizados en:
+Widely used in:
 
-- cámaras
+- cameras
 - display
 - CSI
 - DSI
 
 ---
 
-# ¿Cómo se conectan entre sí?
+# How do they connect to each other?
 
-Los nodos no se conectan mediante punteros ni por jerarquía necesariamente.
+Nodes are not necessarily connected through pointers or through the hierarchy.
 
-La mayoría de las relaciones se realizan mediante **phandles**.
+Most relationships are expressed through **phandles**.
 
-Ejemplo:
+Example:
 
 ```
 UART
@@ -399,30 +399,30 @@ UART
  └── pinctrl-0 -----> Pin Controller
 ```
 
-Cada framework del kernel resuelve automáticamente estas referencias cuando el driver solicita el recurso correspondiente.
+Each kernel framework resolves these references automatically when the driver requests the corresponding resource.
 
 ---
 
-# Resumen
+# Summary
 
-| Categoría | Tiene driver | Representa hardware final | Proporciona recursos |
-|------------|--------------|---------------------------|----------------------|
-| Periférico | Sí | Sí | No |
-| Controlador de bus | Sí | No | Sí (crea dispositivos hijos) |
-| Clock Controller | Sí | No | Sí |
-| GPIO Controller | Sí | No | Sí |
-| Reset Controller | Sí | No | Sí |
-| Regulator | Sí | No | Sí |
-| Interrupt Controller | Sí | No | Sí |
-| DMA Controller | Sí | No | Sí |
-| PHY | Sí | No | Sí |
-| Power Domain | Sí | No | Sí |
-| IOMMU | Sí | No | Sí |
-| CPU | No (driver de plataforma) | No | No |
+| Category | Has a driver | Represents end hardware | Provides resources |
+|----------|--------------|-------------------------|--------------------|
+| Peripheral | Yes | Yes | No |
+| Bus controller | Yes | No | Yes (creates child devices) |
+| Clock Controller | Yes | No | Yes |
+| GPIO Controller | Yes | No | Yes |
+| Reset Controller | Yes | No | Yes |
+| Regulator | Yes | No | Yes |
+| Interrupt Controller | Yes | No | Yes |
+| DMA Controller | Yes | No | Yes |
+| PHY | Yes | No | Yes |
+| Power Domain | Yes | No | Yes |
+| IOMMU | Yes | No | Yes |
+| CPU | No (platform driver) | No | No |
 | Memory | No | No | No |
 | Reserved Memory | No | No | No |
-| Pin Configuration | No | No | Configuración |
-| OPP Table | No | No | Configuración |
-| Thermal Zone | No | No | Configuración |
-| Graph Endpoint | No | No | Describe conexiones |
-| `soc`, `aliases`, `chosen`, `firmware` | No | No | Organización del árbol |
+| Pin Configuration | No | No | Configuration |
+| OPP Table | No | No | Configuration |
+| Thermal Zone | No | No | Configuration |
+| Graph Endpoint | No | No | Describes connections |
+| `soc`, `aliases`, `chosen`, `firmware` | No | No | Tree organisation |

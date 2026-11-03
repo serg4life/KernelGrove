@@ -1,377 +1,377 @@
-# Flujo de comprobaciones del motor semántico
+# Semantic engine check flow
 
-Este documento fija **en qué orden** valida KernelGrove un device tree y **de dónde
-sale cada regla**. El objetivo es no inventar reglas propias: cada aviso que
-el editor muestra tiene que poder señalarse en una fuente externa (la
-especificación, un binding, una cabecera o el código del kernel).
+This document fixes **in what order** KernelGrove validates a device tree and
+**where each rule comes from**. The goal is not to invent rules of our own:
+every warning the editor shows has to be traceable to an external source (the
+specification, a binding, a header or the kernel code).
 
-El motor anterior mezclaba niveles: preguntaba a la base de datos de bindings
-antes de haber comprobado siquiera si el fichero cumplía la sintaxis del
-lenguaje. Sus reglas están reimplantadas cada una en su capa (ver [«Qué quedó
-del motor antiguo»](#qué-quedó-del-motor-antiguo)) y el módulo que las
-guardaba, `dts_engine/semantic_old.py`, ya no existe.
+The previous engine mixed levels: it queried the bindings database before it
+had even checked whether the file followed the language's syntax. Its rules
+have each been reimplemented in their own layer (see [«What is left of the old
+engine»](#what-is-left-of-the-old-engine)) and the module that held them,
+`dts_engine/semantic_old.py`, no longer exists.
 
-## El orden y por qué es ese
+## The order, and why it is that one
 
 ```
-     texto .dts/.dtsi
+     .dts/.dtsi text
             |
             v
-   [0] parser (sintaxis)          llaves, «;», cabeceras de nodo
+   [0] parser (syntax)            braces, «;», node headers
             |
             v
-   [1] Especificación DT          reglas del lenguaje, valen SIEMPRE      <-- implementada
+   [1] DT specification           language rules, they ALWAYS apply        <-- implemented
             |
             v
-   [2] Bindings genéricos         clases de dispositivo y buses comunes    <-- implementada
+   [2] Generic bindings           device classes and common buses          <-- implemented
             |
             v
-   [3] dt-bindings/*.h            constantes: qué significan los números  <-- parcial (existencia y valor)
+   [3] dt-bindings/*.h            constants: what the numbers mean         <-- partial (existence and value)
             |
             v
-   [4] Drivers del kernel         lo que el código exige de verdad
+   [4] Kernel drivers             what the code actually requires
             |
             v
-   [5] Bindings específicos       el binding del «compatible» concreto     <-- parcial
+   [5] Specific bindings          the binding of the concrete «compatible» <-- partial
 ```
 
-Las capas 1, 5 y la parte barata de la 2 se recorren en cada análisis; lo que
-valida el propio schema (los valores de la capa 5 y la capa 2 entera) va en
-una segunda pasada, `run_schema_checks`, que la GUI ejecuta en un hilo de
-fondo. Es la diferencia entre microsegundos por nodo y milisegundos.
+Layers 1, 5 and the cheap part of 2 run on every analysis; what the schema
+itself validates (the values of layer 5 and all of layer 2) goes in a second
+pass, `run_schema_checks`, which the GUI runs in a background thread. It is
+the difference between microseconds per node and milliseconds.
 
-La regla de oro es que **una capa nunca contradice a la anterior**, y que una
-capa solo habla de lo que su fuente afirma. Si una comprobación necesita algo
-que aún no se ha resuelto (una macro sin expandir, un include sin fusionar),
-se calla en lugar de inventarse un error.
+The golden rule is that **a layer never contradicts the previous one**, and
+that a layer only speaks about what its source states. If a check needs
+something that has not been resolved yet (an unexpanded macro, an unmerged
+include), it stays quiet instead of inventing an error.
 
-El orden va de lo universal a lo particular:
+The order goes from the universal to the particular:
 
-| Capa | Fuente de verdad | Alcance | Estado |
-|------|------------------|---------|--------|
-| 1 | Devicetree Specification v0.4 | Todo device tree, sin excepción | **Implementada** |
-| 2 | Bindings genéricos (los schemas con `select` de dt-schema: cap. 4 de la especificación y bindings comunes del kernel) | Clases de dispositivo y buses | **Implementada** |
-| 3 | Cabeceras `dt-bindings/*.h` | Valores de las propiedades | **Parcial** (existencia, y valor si hubo `cpp` en la ingesta) |
-| 4 | Drivers del kernel (`drivers/**`) | Lo que el código lee de verdad | Pendiente |
-| 5 | Binding del `compatible`, procesado por dt-schema (`Documentation/devicetree/bindings/**`) | Un dispositivo concreto | **Parcial** |
+| Layer | Source of truth | Scope | Status |
+|-------|-----------------|-------|--------|
+| 1 | Devicetree Specification v0.4 | Every device tree, no exceptions | **Implemented** |
+| 2 | Generic bindings (the dt-schema schemas with `select`: chapter 4 of the specification and the kernel's common bindings) | Device classes and buses | **Implemented** |
+| 3 | `dt-bindings/*.h` headers | Property values | **Partial** (existence, and value if `cpp` was available at ingestion) |
+| 4 | Kernel drivers (`drivers/**`) | What the code actually reads | Pending |
+| 5 | The `compatible`'s binding, processed by dt-schema (`Documentation/devicetree/bindings/**`) | One concrete device | **Partial** |
 
-### Capa 1 — Especificación Device Tree *(implementada)*
+### Layer 1 — Device Tree specification *(implemented)*
 
-Fuente: <https://github.com/devicetree-org/devicetree-specification>
-(Devicetree Specification v0.4, capítulos 2, 3 y 6).
+Source: <https://github.com/devicetree-org/devicetree-specification>
+(Devicetree Specification v0.4, chapters 2, 3 and 6).
 
-Es la única capa que puede afirmar algo de *cualquier* device tree, venga del
-kernel, de un fabricante o del propio editor. Comprueba nombres, tipos de
-valor de las propiedades estándar, direccionamiento y estructura del
-documento. Está detallada más abajo.
+It is the only layer that can state something about *any* device tree,
+whether it comes from the kernel, from a vendor or from the editor itself. It
+checks names, value types of the standard properties, addressing and document
+structure. It is detailed further down.
 
-### Capa 2 — Bindings genéricos *(implementada)*
+### Layer 2 — Generic bindings *(implemented)*
 
-Código: `src/kernelgrove/dts_engine/checks/generic/`.
+Code: `src/kernelgrove/dts_engine/checks/generic/`.
 
-El capítulo 4 de la propia especificación ya define bindings genéricos
-(clase serial, clase red, `simple-bus`, controladores Open PIC), y el kernel
-añade los suyos: `i2c-controller.yaml`, `gpio.yaml`, `pinctrl.yaml`,
+Chapter 4 of the specification itself already defines generic bindings
+(serial class, network class, `simple-bus`, Open PIC controllers), and the
+kernel adds its own: `i2c-controller.yaml`, `gpio.yaml`, `pinctrl.yaml`,
 `regulator.yaml`, `property-units.yaml`…
 
-**Cuáles son, exactamente**: los que dt-schema marca con `select`. Un binding
-normal se busca por su `compatible`; uno genérico se prueba contra *todos* los
-nodos y su `select` decide si le toca. En el kernel son 228 de 5 663, y en
-ellos está lo que vale para una *clase*: que un controlador GPIO declare
-`#gpio-cells`, que un bus I2C no pase de 5 MHz, que una propiedad acabada en
-`-microvolt` sea un entero, o que `pinctrl-names` venga con su `pinctrl-0`.
+**Which ones, exactly**: the ones dt-schema marks with `select`. A normal
+binding is looked up by its `compatible`; a generic one is tried against
+*every* node and its `select` decides whether it applies. In the kernel there
+are 228 of them out of 5 663, and they hold what applies to a *class*: that a
+GPIO controller declares `#gpio-cells`, that an I2C bus does not go above
+5 MHz, that a property ending in `-microvolt` is an integer, or that
+`pinctrl-names` comes with its `pinctrl-0`.
 
-Aquí también se comprueba el registro de prefijos de fabricante
-(`vendor-prefixes.yaml`): un `noexiste,propiedad` suele ser una errata. Va
-aparte del bucle porque sus 966 patrones costaban el 86 % del tiempo de la
-capa, y la respuesta solo depende del nombre, así que se resuelve con una
-expresión regular y se recuerda.
+The vendor-prefix registry (`vendor-prefixes.yaml`) is checked here as well:
+a `doesnotexist,property` is usually a typo. It sits outside the loop because
+its 966 patterns took 86 % of the layer's time, and the answer depends only on
+the name, so it is resolved with one regular expression and memoised.
 
-**Se ejecuta en la pasada diferida.** `run_schema_checks` reúne todo lo que
-consiste en darle un nodo entero a un validador de JSON Schema —esta capa
-completa (≈10 ms por nodo) y los valores de la capa 5 (≈2,6 ms)— porque
-ninguna de las dos cabe en cada pulsación de tecla. La GUI la lanza en un hilo
-de fondo tras cada análisis y añade sus avisos cuando llegan
-(`SchemaChecksWorker`). Cuando las dos capas dicen lo mismo de la misma
-propiedad —el binding de Cadence limita `clock-frequency` a 400 kHz y la clase
-I2C a 5 MHz— se conserva el primero, que es el del binding concreto
-(`KernelGroveService.merge_deferred`).
+**It runs in the deferred pass.** `run_schema_checks` gathers everything that
+consists of handing a whole node to a JSON Schema validator —this entire layer
+(≈10 ms per node) and the values of layer 5 (≈2.6 ms)— because neither fits in
+every keystroke. The GUI launches it in a background thread after each
+analysis and adds its warnings as they arrive (`SchemaChecksWorker`). When the
+two layers say the same thing about the same property —the Cadence binding
+caps `clock-frequency` at 400 kHz and the I2C class at 5 MHz— the first one is
+kept, which is the concrete binding's (`KernelGroveService.merge_deferred`).
 
-| Código | Gravedad | Qué comprueba |
-|--------|----------|----------------|
-| `generic-missing-property` | ERROR | la clase exige una propiedad que no está (incluidas las dependencias: `gpio-controller` obliga a `#gpio-cells`) |
-| `generic-property-value` | WARNING | el valor incumple lo que la clase declara |
-| `generic-vendor-prefix` | WARNING | el prefijo de fabricante de una propiedad no está registrado |
+| Code | Severity | What it checks |
+|------|----------|----------------|
+| `generic-missing-property` | ERROR | the class requires a property that is not there (dependencies included: `gpio-controller` requires `#gpio-cells`) |
+| `generic-property-value` | WARNING | the value breaks what the class declares |
+| `generic-vendor-prefix` | WARNING | a property's vendor prefix is not registered |
 
-Lo que **no** vuelve aquí es la comprobación de bus del motor antiguo
-(`_check_placement`): dt-schema no dice de qué bus cuelga un dispositivo (no
-existe ningún `i2c-peripheral-props.yaml`), así que eso sigue saliendo de la
-inferencia propia de la ingesta.
+What does **not** come back here is the old engine's bus check
+(`_check_placement`): dt-schema does not say which bus a device hangs from
+(there is no `i2c-peripheral-props.yaml`), so that still comes from the
+ingestion's own inference.
 
-### Capa 3 — Cabeceras `dt-bindings/*.h` *(parcial: existencia y valor)*
+### Layer 3 — `dt-bindings/*.h` headers *(partial: existence and value)*
 
-Código: `dts_engine/checks/macros.py`. Ingesta: `db_manager/macros.py` (tabla
-`--table macros`, nombres derivados de `sources`, valores de `cpp` contra el
+Code: `dts_engine/checks/macros.py`. Ingestion: `db_manager/macros.py`
+(`--table macros`, names derived from `sources`, values from `cpp` against the
 checkout).
 
-Los valores de los device trees reales no son números sino macros
-(`GIC_SPI`, `IRQ_TYPE_LEVEL_HIGH`, `RK3399_CLK_...`), y esta capa tiene dos
-niveles:
+Values in real device trees are not numbers but macros (`GIC_SPI`,
+`IRQ_TYPE_LEVEL_HIGH`, `RK3399_CLK_...`), and this layer has two levels:
 
-**Existencia**, siempre disponible: si `GPIO_HIGH` aparece en un valor,
-¿está esa macro definida en algún sitio? La ingesta indexa cada cabecera
-`dt-bindings/*.h` con un `#\s*define NOMBRE` por línea (tabla
-`header_macros`, sin preprocesador), incluido el cierre transitivo de lo
-que esa cabecera incluye a su vez (el grafo es minúsculo, 24 aristas en
-todo el árbol). En tiempo de análisis, `api/service.py` calcula qué macros
-ve el documento por sus propios `#include` en cascada
-(`IncludeResolver.macro_names`) y se lo pasa al motor como `local_macros`,
-igual que `merged_root` para la fusión de includes — el motor no toca la
-base de datos.
+**Existence**, always available: if `GPIO_HIGH` appears in a value, is that
+macro defined anywhere? The ingestion indexes every `dt-bindings/*.h` header
+with one `#\s*define NAME` per line (`header_macros` table, no preprocessor),
+including the transitive closure of whatever that header includes in turn (the
+graph is tiny, 24 edges in the whole tree). At analysis time, `api/service.py`
+works out which macros the document sees through its own cascading `#include`s
+(`IncludeResolver.macro_names`) and hands it to the engine as `local_macros`,
+just like `merged_root` for include merging — the engine does not touch the
+database.
 
-Dos gravedades, según la fuerza de la evidencia:
+Two severities, depending on the strength of the evidence:
 
-| Código | Gravedad | Qué comprueba |
+| Code | Severity | What it checks |
+|------|----------|----------------|
+| `macro-missing-include` | WARNING | the name exists in some known `dt-bindings/*.h` header, but not among the ones this document includes — probably a missing `#include` |
+| `macro-unknown` | INFO | the name does not exist in any known `dt-bindings/*.h` header (it could be a driver-local macro, outside `dt-bindings/`) |
+
+It is a cheap check (dictionary lookups, no `jsonschema`), so it runs in
+`run_checks`, not in the deferred pass.
+
+**Value**, only if the database was built with `cpp` available: the ingestion
+asks `cpp` to expand every macro in the real context of its header —a single
+invocation per header, with all its names behind a marker that survives `cpp`
+reordering lines— and whatever is left, if it is an expression of only numbers
+and operators, is evaluated with a minimal, restricted interpreter
+(`db_manager/macros.evaluate_c_int_expr`). A function-like macro with no
+arguments (`GIC_CPU_MASK_RAW`) does not expand without parentheses and is left
+without a value, although it stays in the existence index. `cpp` runs **only
+at ingestion**, against the kernel checkout — never at analysis time and never
+on user text, the same discipline as the rest of the database.
+
+The resolved value is used in `checks/bindings/instance.py`: a cell that is
+not a numeric literal is looked up in `ctx.local_macro_values`
+(`IncludeResolver.macro_values`, same cascade as `macro_names` but only
+computed in the deferred pass, the only one that needs values) before it is
+given up as uncodable. With this, properties like
+`hisilicon,fixed-mode = <SOME_MACRO>;` get validated against their binding's
+`enum` instead of staying invisible — but **not** everything carrying a macro
+benefits: `interrupts` is still not encoded even when its type cell resolves,
+because its matrix shape depends on the controller's `#interrupt-cells`
+(layer 4), a different limitation that predates this one.
+
+### Layer 4 — Kernel drivers *(pending)*
+
+A binding describes what *should* be; the driver is what actually gets read.
+`of_property_read_*`, `of_device_id`, the `of_match_table`s… make it possible
+to detect properties the binding does not document, default values, and
+compatibles that exist in the code but not in `Documentation/`.
+
+It is the most expensive layer (it means analysing C) and the last one to
+contribute hard rules: it serves mostly to explain *why* something is needed.
+
+### Layer 5 — Specific bindings *(partial)*
+
+Code: `src/kernelgrove/dts_engine/checks/bindings/`. Details of the dt-schema
+integration in [`DT-SCHEMA-INTEGRATION.md`](DT-SCHEMA-INTEGRATION.md).
+
+The binding of the concrete `compatible`: its `required`, its allowed
+properties, its values and its mandatory child nodes. It is the most precise
+and the most fragile, and that is why it goes last: it only applies to a node
+whose compatible has been resolved **exactly**, including the node inside the
+schema it corresponds to (a `ti,twl4030-pwm` is validated against the MFD's
+subnode, not against the MFD).
+
+The source is not the raw YAML but the schema already processed by dt-schema
+during ingestion, with the `allOf`/`$ref` inheritance resolved: without it,
+1 988 `required` entries in the kernel —`reg` in 221 bindings among them—
+would be invisible.
+
+| Code | Severity | What it checks |
+|------|----------|----------------|
+| `binding-missing-property` | ERROR | a property the binding requires is missing |
+| `binding-missing-node` | ERROR | a subnode the binding requires is missing |
+| `binding-unknown-property` | WARNING / INFO | the binding, being closed (`additionalProperties: false`), does not allow that property |
+| `binding-property-value` | WARNING | the value is not in the `enum`/`const` or falls outside `minimum`/`maximum` |
+| `binding-rejected-compatible` | WARNING | the compatible is listed in `incomplete-devices.yaml` |
+| `binding-unknown-compatible` | INFO | no YAML binding documents it, so nothing else can be checked |
+| `binding-newer-than-kernel` | WARNING | the binding is documented in a release later than the target kernel |
+
+`binding-newer-than-kernel` is the only rule that needs a piece of data found
+in no device tree: which kernel you are working against. The user supplies it
+from the status bar (`KernelGroveService.kernel_target`) and without it the
+rule stays quiet. It compares against `schemas.since`, the first release whose
+tree ships the binding file, and that is why it talks about when something was
+**documented**: a compatible may have existed earlier in a `.txt` binding
+under another name.
+
+Values are checked by handing the whole node to the binding's schema, as
+`dt-validate` does, and **in the deferred pass** together with layer 2:
+`checks/bindings/instance.py` translates each property into the shape the
+schema expects (a `uint32` is an integer, a `uint32-matrix` a list of lists)
+and `jsonschema` does the rest. **Whatever cannot be translated with
+certainty is left out** and nobody talks about it: values with
+`dt-bindings/*.h` macros (layer 3), `&label` references —how many cells each
+one takes is decided by the node it points to— and matrices whose row size
+depends on another node, such as `interrupts` and its `#interrupt-cells`. The
+exception is `reg`, whose rows come from the parent's
+`#address-cells`/`#size-cells`.
+
+Only **value** problems are counted from the schema's result: `required` and
+`additionalProperties` are covered by our own rules, which know how to look at
+the merged tree and downgrade the warning when it is not conclusive. The
+schema's conditional branches (`if/then`, `oneOf`) are walked only to learn
+which properties *may* be valid, never to require anything.
+
+## Layer 1 in detail
+
+Code: `src/kernelgrove/dts_engine/checks/spec/`, one module per block of the
+specification.
+
+| Module | Sections | What it checks |
 |--------|----------|----------------|
-| `macro-missing-include` | WARNING | el nombre existe en alguna cabecera `dt-bindings/*.h` conocida, pero no entre las que este documento incluye — probablemente falta un `#include` |
-| `macro-unknown` | INFO | el nombre no existe en ninguna cabecera `dt-bindings/*.h` conocida (podría ser una macro local de un driver, fuera de `dt-bindings/`) |
+| `naming.py` | §2.2.1, §2.2.3.1, §6.2, §6.3 | node-name and unit-address (character set, length, starting with a letter), property names, labels, node/property clashes, properties before child nodes |
+| `properties.py` | §2.3, §2.4, §3.2 | value type of the standard properties (`<empty>`, `<u32>`, `<string>`, `<stringlist>`), allowed values of `status` and `chassis-type`, `compatible` format, deprecated properties, interrupt rules |
+| `addressing.py` | §2.2.1, §2.3.5, §2.3.6 | `reg` against `unit-address`, number of `reg` cells, `#address-cells`/`#size-cells` on nodes with addressed children |
+| `structure.py` | §3.1-§3.8, §6.4 | mandatory properties of the root, `/cpus` and `/memory`, `/aliases` names, `cpu` nodes, `/dts-v1/;` |
 
-Es una comprobación barata (consultas a diccionario, sin `jsonschema`), así
-que corre en `run_checks`, no en la pasada diferida.
+`values.py` and `context.py` no longer live in `spec/` but one level up, in
+`checks/`, because every layer shares them:
 
-**Valor**, solo si la base se construyó con `cpp` disponible: la ingesta le
-pide a `cpp` que expanda cada macro en el contexto real de su cabecera —una
-sola invocación por cabecera, con todos sus nombres detrás de un marcador
-que sobrevive a que `cpp` reordene líneas— y lo que queda, si es una
-expresión de solo números y operadores, se evalúa con un intérprete mínimo
-y restringido (`db_manager/macros.evaluate_c_int_expr`). Una macro de
-función sin argumentos (`GIC_CPU_MASK_RAW`) no se expande sin paréntesis y
-se queda sin valor, aunque sigue en el índice de existencia. `cpp` corre
-**solo en ingesta**, contra el checkout del kernel — nunca en tiempo de
-análisis ni sobre texto del usuario, la misma disciplina que el resto de la
-base de datos.
+| Module | What it provides |
+|--------|------------------|
+| `checks/values.py` | reading a DTS value (strings, cells, bytestrings, references) and detecting what cannot be resolved yet (§6.3) |
+| `checks/context.py` | shared state: own and merged tree, the line of each property, resolution of `&label { … }` reopenings, and the policy for when something can be said to be missing |
 
-El valor resuelto se usa en `checks/bindings/instance.py`: una celda que no
-es un literal numérico se busca en `ctx.local_macro_values`
-(`IncludeResolver.macro_values`, misma cascada que `macro_names` pero solo
-calculada en la pasada diferida, que es la única que necesita valores) antes
-de darla por no codificable. Con esto, propiedades como
-`hisilicon,fixed-mode = <ALGUNA_MACRO>;` pasan a validarse contra el `enum`
-de su binding en vez de quedarse invisibles — pero **no** todo lo que lleva
-una macro se beneficia: `interrupts` sigue sin codificarse aunque su celda
-de tipo se resuelva, porque su forma de matriz depende del
-`#interrupt-cells` del controlador (capa 4), una limitación distinta y
-anterior a esta.
+### From the specification to the severity
 
-### Capa 4 — Drivers del kernel *(pendiente)*
-
-Un binding describe lo que *debería* ser; el driver es lo que realmente se
-lee. `of_property_read_*`, `of_device_id`, los `of_match_table`… permiten
-detectar propiedades que el binding no documenta, valores por defecto, y
-compatibles que existen en el código pero no en `Documentation/`.
-
-Es la capa más costosa (hay que analizar C) y la última que aporta reglas
-duras: sirve sobre todo para explicar *por qué* algo hace falta.
-
-### Capa 5 — Bindings específicos *(parcial)*
-
-Código: `src/kernelgrove/dts_engine/checks/bindings/`. Detalle de la integración con
-dt-schema en [`DT-SCHEMA-INTEGRATION.md`](DT-SCHEMA-INTEGRATION.md).
-
-El binding del `compatible` concreto: sus `required`, sus propiedades
-admitidas, sus valores y sus nodos hijo obligatorios. Es lo más preciso y lo
-más frágil, y por eso va al final: solo se aplica a un nodo cuyo compatible se
-ha resuelto **de forma exacta**, incluido el nodo dentro del schema al que
-corresponde (un `ti,twl4030-pwm` se valida contra el subnodo del MFD, no
-contra el MFD).
-
-La fuente no es el YAML crudo sino el schema ya procesado por dt-schema
-durante la ingesta, con la herencia `allOf`/`$ref` resuelta: sin ella, 1 988
-entradas `required` del kernel —entre ellas `reg` en 221 bindings— serían
-invisibles.
-
-| Código | Gravedad | Qué comprueba |
-|--------|----------|----------------|
-| `binding-missing-property` | ERROR | falta una propiedad que el binding exige |
-| `binding-missing-node` | ERROR | falta un subnodo que el binding exige |
-| `binding-unknown-property` | WARNING / INFO | el binding, cerrado (`additionalProperties: false`), no admite esa propiedad |
-| `binding-property-value` | WARNING | el valor no está en el `enum`/`const` o se sale de `minimum`/`maximum` |
-| `binding-rejected-compatible` | WARNING | el compatible está en `incomplete-devices.yaml` |
-| `binding-unknown-compatible` | INFO | ningún binding YAML lo documenta, así que no se puede comprobar nada más |
-| `binding-newer-than-kernel` | WARNING | el binding se documenta en una release posterior al kernel objetivo |
-
-`binding-newer-than-kernel` es la única regla que necesita un dato que no
-está en ningún device tree: contra qué kernel se trabaja. Lo aporta el
-usuario desde la barra de estado (`KernelGroveService.kernel_target`) y sin él la
-regla se calla. Compara con `schemas.since`, la primera release cuyo árbol
-trae el fichero del binding, y por eso habla de cuándo se **documentó**: un
-compatible puede haber existido antes en un binding `.txt` con otro nombre.
-
-Los valores se comprueban dándole el nodo entero al schema del binding, como
-hace `dt-validate`, y **en la pasada diferida** junto con la capa 2: `checks/bindings/instance.py` traduce cada propiedad a la
-forma que el schema espera (un `uint32` es un entero, un `uint32-matrix` una
-lista de listas) y `jsonschema` hace el resto. **Lo que no se puede traducir
-con certeza se queda fuera** y nadie habla de ello: valores con macros de
-`dt-bindings/*.h` (capa 3), referencias `&label` —cuántas celdas ocupa cada
-una lo dice el nodo apuntado— y matrices cuyo tamaño de fila depende de otro
-nodo, como `interrupts` y su `#interrupt-cells`. La excepción es `reg`, cuyas
-filas salen de `#address-cells`/`#size-cells` del padre.
-
-Del resultado del schema solo se cuentan los problemas de **valor**: `required`
-y `additionalProperties` los cubren las reglas propias, que saben mirar el
-árbol fusionado y rebajar el aviso cuando no es concluyente. Las ramas
-condicionales del schema (`if/then`, `oneOf`) se recorren solo para saber qué
-propiedades *pueden* ser válidas, nunca para exigir nada.
-
-## Capa 1 en detalle
-
-Código: `src/kernelgrove/dts_engine/checks/spec/`, un módulo por bloque de la
-especificación.
-
-| Módulo | Apartados | Qué comprueba |
-|--------|-----------|----------------|
-| `naming.py` | §2.2.1, §2.2.3.1, §6.2, §6.3 | node-name y unit-address (juego de caracteres, longitud, empezar por letra), nombres de propiedad, etiquetas, choque nodo/propiedad, propiedades antes que nodos hijo |
-| `properties.py` | §2.3, §2.4, §3.2 | tipo de valor de las propiedades estándar (`<empty>`, `<u32>`, `<string>`, `<stringlist>`), valores admitidos de `status` y `chassis-type`, formato de `compatible`, propiedades obsoletas, reglas de interrupciones |
-| `addressing.py` | §2.2.1, §2.3.5, §2.3.6 | `reg` frente a `unit-address`, número de celdas de `reg`, `#address-cells`/`#size-cells` en nodos con hijos direccionados |
-| `structure.py` | §3.1-§3.8, §6.4 | propiedades obligatorias de la raíz, `/cpus` y `/memory`, nombres de `/aliases`, nodos `cpu`, `/dts-v1/;` |
-
-`values.py` y `context.py` ya no viven en `spec/` sino un nivel más arriba, en
-`checks/`, porque los comparten todas las capas:
-
-| Módulo | Qué aporta |
-|--------|------------|
-| `checks/values.py` | leer un valor DTS (cadenas, celdas, bytestrings, referencias) y detectar lo que no se puede resolver todavía (§6.3) |
-| `checks/context.py` | estado común: árbol propio y fusionado, línea de cada propiedad, resolución de las reaperturas `&label { … }` y política de cuándo se puede afirmar que algo falta |
-
-### De la especificación a la gravedad
-
-| La especificación dice | Gravedad | Ejemplo |
+| The specification says | Severity | Example |
 |------------------------|----------|---------|
-| «shall» / «must» | ERROR | `status = "enabled"` no es un valor admitido (§2.3.4) |
-| «should» / «recommended» | WARNING | un `compatible` con mayúsculas o guiones bajos (§2.3.1) |
-| obsoleto | WARNING / INFO | `name` (§2.3.11), `device_type` fuera de cpu y memory (§2.3.12) |
-| límite que nadie aplica | INFO | los 31 caracteres de nombres y etiquetas: es la norma, pero ni dtc ni el kernel lo respetan |
+| «shall» / «must» | ERROR | `status = "enabled"` is not an allowed value (§2.3.4) |
+| «should» / «recommended» | WARNING | a `compatible` with capitals or underscores (§2.3.1) |
+| deprecated | WARNING / INFO | `name` (§2.3.11), `device_type` outside cpu and memory (§2.3.12) |
+| a limit nobody enforces | INFO | the 31 characters of names and labels: it is the rule, but neither dtc nor the kernel follow it |
 
-### Cuándo puede el motor decir que «falta» algo
+### When the engine can say something is «missing»
 
-Afirmar una ausencia exige ver el árbol entero, y el fichero que se está
-editando casi nunca lo contiene: una placa hereda `/cpus`, `/memory` y media
-docena de propiedades obligatorias del `.dtsi` que incluye.
+Stating an absence requires seeing the whole tree, and the file being edited
+hardly ever contains it: a board inherits `/cpus`, `/memory` and half a dozen
+mandatory properties from the `.dtsi` it includes.
 
-**Lo primero es mirar el árbol correcto.** Antes de comprobar nada,
-`KernelGroveService.analyze_source` fusiona una copia del árbol con el contenido de
-sus includes —lo mismo que hace el visualizador, resolviéndolos contra la
-tabla `sources` de la base de datos— y se lo pasa a las comprobaciones como
-`merged_root`. La presencia de un nodo o de una propiedad se consulta ahí
-(`SpecContext.effective_properties` / `effective_children`); **la línea del
-aviso sale siempre del árbol del documento**, que es el único cuyas líneas
-corresponden al texto que el usuario tiene delante.
+**The first thing is to look at the right tree.** Before checking anything,
+`KernelGroveService.analyze_source` merges a copy of the tree with the content
+of its includes —the same thing the visualizer does, resolving them against
+the database's `sources` table— and hands it to the checks as `merged_root`.
+Whether a node or a property is present is asked there
+(`SpecContext.effective_properties` / `effective_children`); **the warning's
+line always comes from the document's tree**, the only one whose lines match
+the text the user has in front of them.
 
-Con eso, hay dos clases de exigencia:
+With that, there are two kinds of requirement:
 
-- **Del documento entero** (`model` y `compatible` en la raíz, `/cpus`,
-  `/memory`, `/dts-v1/;`): solo significan algo en un device tree completo y
-  visto entero, así que no se comprueban en un `.dtsi` ni en un fichero cuyos
-  includes no se han podido fusionar (`SpecContext.is_complete_document`).
-- **De un nodo concreto** (un `cpu` sin `reg`, un `memory` sin `device_type`,
-  un controlador de interrupciones sin `#interrupt-cells`): el nodo está
-  escrito en este fichero, así que la comprobación vale siempre.
+- **Of the whole document** (`model` and `compatible` at the root, `/cpus`,
+  `/memory`, `/dts-v1/;`): they only mean something in a complete device tree
+  seen in full, so they are not checked in a `.dtsi` nor in a file whose
+  includes could not be merged (`SpecContext.is_complete_document`).
+- **Of a concrete node** (a `cpu` without `reg`, a `memory` without
+  `device_type`, an interrupt controller without `#interrupt-cells`): the node
+  is written in this file, so the check always applies.
 
-Cuando la comprobación vale pero no se puede ser concluyente —el documento es
-un fragmento, algún include no se encontró, o el nodo solo se reabre aquí con
-`&label { … }`— el diagnóstico **se rebaja un escalón** (error → aviso,
-aviso → informativo) y se explica el motivo en la pista, en lugar de callarse.
-Eso lo decide `SpecContext.report(..., missing=True)`, en un solo sitio.
+When the check applies but cannot be conclusive —the document is a fragment,
+some include was not found, or the node is only reopened here with
+`&label { … }`— the diagnostic **is downgraded one step** (error → warning,
+warning → info) and the reason is explained in the hint, instead of staying
+quiet. `SpecContext.report(..., missing=True)` decides that, in a single
+place.
 
-La versión anterior de esta capa silenciaba las comprobaciones en cuanto el
-documento tenía un `#include`, que es el caso normal: borrar `model` de la
-raíz o `reg` de un `cpu` no producía nada. La regla honesta no es callar, es
-mirar el árbol completo y, si no se puede, decirlo con menos gravedad.
+The previous version of this layer silenced the checks as soon as the
+document had an `#include`, which is the normal case: deleting `model` from
+the root or `reg` from a `cpu` produced nothing. The honest rule is not to go
+quiet, it is to look at the complete tree and, if that is not possible, say so
+with a lower severity.
 
-### Lo que la capa 1 deliberadamente NO comprueba
+### What layer 1 deliberately does NOT check
 
-- **Nada que dependa de una macro sin expandir.** Es la capa 3.
-- **Nada específico de un bus.** Que la unit-address de un dispositivo PCI sea
-  `dev,fn` o que un chip select SPI valga menos que `#cs-lines` lo define el
-  binding del bus (capa 2). Por eso `_parse_unit_address` solo compara
-  unit-address que son hexadecimal puro.
-- **Nada específico de un dispositivo.** Qué propiedades necesita un
-  `atmel,24c02` es la capa 5.
-- **La coherencia de las referencias.** Resolver `&label` contra el árbol y
-  seguir `interrupt-parent` exige fusionar includes primero; hoy el parser deja
-  las reapariciones `&label { … }` como pseudonodos sueltos.
-- **Nada basado en la indentación**: DTS no tiene reglas de indentación (ver
+- **Nothing that depends on an unexpanded macro.** That is layer 3.
+- **Nothing bus-specific.** Whether a PCI device's unit-address is `dev,fn` or
+  whether an SPI chip select is below `#cs-lines` is defined by the bus
+  binding (layer 2). That is why `_parse_unit_address` only compares
+  unit-addresses that are pure hexadecimal.
+- **Nothing device-specific.** Which properties an `atmel,24c02` needs is
+  layer 5.
+- **Reference consistency.** Resolving `&label` against the tree and
+  following `interrupt-parent` requires merging includes first; today the
+  parser leaves `&label { … }` reopenings as loose pseudo-nodes.
+- **Nothing based on indentation**: DTS has no indentation rules (see
   `CLAUDE.md`).
 
-### Verificación contra el kernel
+### Verification against the kernel
 
-Toda regla nueva se contrasta con los 6347 ficheros `.dts`/`.dtsi` del
-checkout (`kernel/linux/arch/**`), que se dan por correctos: si una regla
-dispara masivamente, o la regla está mal planteada o hay que rebajarla.
+Every new rule is checked against the 6347 `.dts`/`.dtsi` files in the
+checkout (`kernel/linux/arch/**`), which are taken as correct: if a rule fires
+massively, either the rule is badly framed or it has to be downgraded.
 
-La medida que vale es la del camino que usa la aplicación (`--db`, con los
-includes fusionados); sin base de datos no se resuelve nada y las cifras solo
-sirven para comparar entre sí.
+The measurement that counts is the one along the path the application uses
+(`--db`, with includes merged); without a database nothing resolves and the
+figures are only good for comparing with each other.
 
-Estado actual con `--db`: **10 986 diagnósticos en 6347 ficheros** (1,7 por
-fichero), y **3464 ficheros sin ningún diagnóstico**. Por gravedad: 397
-ERROR, 4940 WARNING y 5649 INFO. Los ERROR salen en 156 ficheros y se han
-revisado grupo a grupo:
+Current status with `--db`: **10 986 diagnostics in 6347 files** (1.7 per
+file), and **3464 files with no diagnostic at all**. By severity: 397 ERROR,
+4940 WARNING and 5649 INFO. The ERRORs appear in 156 files and have been
+reviewed group by group:
 
-| Nº | Diagnóstico | Verificado |
-|----|-------------|-----------|
-| 231 | alias con `_`, mayúsculas o comas (§3.3) | 27 ficheros, sobre todo powerpc y layerscape |
-| 90 | falta `/cpus` (§3.1) | placas ARM y MIPS antiguas que no declaran CPUs en ninguno de sus ficheros |
-| 35 | la raíz no declara `model`/`compatible` (§3.2) | p. ej. `mips/…/octeon_3xxx.dts`, que no los tiene |
-| 17 | nodo `memory` sin `device_type` (§3.4) | real |
-| 16 | `interrupt-map` sin `#interrupt-cells`/`#address-cells` (§2.4.3) | 6 ficheros powerpc |
-| 4 | alias mal formado, `/cpus` sin celdas, nodo que repite el nombre de una propiedad | real |
+| No. | Diagnostic | Verified |
+|-----|------------|----------|
+| 231 | alias with `_`, capitals or commas (§3.3) | 27 files, mostly powerpc and layerscape |
+| 90 | `/cpus` missing (§3.1) | old ARM and MIPS boards that declare no CPUs in any of their files |
+| 35 | the root does not declare `model`/`compatible` (§3.2) | e.g. `mips/…/octeon_3xxx.dts`, which has neither |
+| 17 | `memory` node without `device_type` (§3.4) | real |
+| 16 | `interrupt-map` without `#interrupt-cells`/`#address-cells` (§2.4.3) | 6 powerpc files |
+| 4 | malformed alias, `/cpus` without cells, node repeating a property's name | real |
 
-Los avisos más frecuentes —unit-address que no coincide con `reg`,
-unit-address sin `reg`, compatibles con mayúsculas o guiones bajos— también
-son desviaciones reales, las mismas que señala `dtc`.
+The most frequent warnings —unit-address not matching `reg`, unit-address
+without `reg`, compatibles with capitals or underscores— are real deviations
+too, the same ones `dtc` reports.
 
-Se mide con:
+It is measured with:
 
 ```sh
-python scripts/check_corpus.py --db                # como la aplicación
-python scripts/check_corpus.py --db --limit 400    # muestra rápida
+python scripts/check_corpus.py --db                # like the application
+python scripts/check_corpus.py --db --limit 400    # quick sample
 python scripts/check_corpus.py --code spec-reg-mismatch --examples 20
-python scripts/check_corpus.py --syntax            # diagnósticos del parser
+python scripts/check_corpus.py --syntax            # parser diagnostics
 ```
 
-Las falsas alarmas que ya costó eliminar una vez, y que hay que vigilar al
-tocar reglas:
+The false alarms it already took effort to remove once, and which need
+watching when touching rules:
 
-- nombres y etiquetas generados por macros de C (`DIE_NODE(pmgr)`,
+- names and labels generated by C macros (`DIE_NODE(pmgr)`,
   `EFUSE(10, 27)`);
-- la barra de continuación `\` dentro de un valor;
-- `stdout-path = &uart0`: una referencia donde se espera una ruta (§6.3);
-- `/dts-v1/;` escrito en un `.dtsi` que la placa incluye —la marca vale esté
-  donde esté, porque `dtc` ve el texto de todos los ficheros pegados, así que
-  se busca también dentro de los includes
+- the `\` continuation backslash inside a value;
+- `stdout-path = &uart0`: a reference where a path is expected (§6.3);
+- `/dts-v1/;` written in a `.dtsi` the board includes —the marker counts
+  wherever it is, because `dtc` sees the text of every file pasted together,
+  so it is searched for inside the includes too
   (`IncludeResolver.text_in_includes`);
-- las reaperturas `&label { … }`, que el parser cuelga de la raíz y no son
-  hijos declarados en el cuerpo del nodo;
-- un fichero que reabre un nodo suyo (`soc { … }; soc { … };`): el parser
-  fusiona ambas apariciones en un solo nodo, como hace `dtc`. Cuando creaba
-  dos hermanos idénticos, la fusión de includes solo alcanzaba a uno y el
-  otro parecía no declarar `#address-cells`.
+- `&label { … }` reopenings, which the parser hangs from the root and which
+  are not children declared in the node's body;
+- a file that reopens one of its own nodes (`soc { … }; soc { … };`): the
+  parser merges both occurrences into a single node, as `dtc` does. When it
+  created two identical siblings, include merging only reached one of them
+  and the other appeared not to declare `#address-cells`.
 
-## Qué quedó del motor antiguo
+## What is left of the old engine
 
-`dts_engine/semantic_old.py` se ha borrado. Se conservó mientras se
-reconstruían las capas 2 y 5, como referencia de lo que había que recuperar;
-hoy cada regla vive en su capa y el módulo no lo instanciaba nadie:
+`dts_engine/semantic_old.py` has been deleted. It was kept while layers 2 and
+5 were being rebuilt, as a reference of what had to be recovered; today every
+rule lives in its layer and nothing instantiated the module:
 
-| Regla antigua | Dónde está hoy |
-|---------------|----------------|
-| `_check_placement` (nodo colgado del bus equivocado) | No vuelve tal cual: dt-schema no dice de qué bus cuelga un dispositivo, así que eso sigue saliendo de la inferencia de la ingesta (ver capa 2) |
-| `_check_required` (propiedades y nodos hijo obligatorios) | Capa 5, `checks/bindings/rules.py` (`binding-missing-property`, `binding-missing-node`) |
-| Aviso de `compatible` desconocido | Capa 5, `binding-unknown-compatible` |
-| `BindingSpec` / `BindingLookup` (contrato con la base de datos) | `checks/bindings/lookup.py`, que habla de schemas ya procesados por dt-schema en lugar del YAML crudo |
-| `check_compatible_format` de `parser.py` | Capa 1 (§2.3.1) |
+| Old rule | Where it is today |
+|----------|-------------------|
+| `_check_placement` (node hanging from the wrong bus) | It does not come back as it was: dt-schema does not say which bus a device hangs from, so that still comes from the ingestion's inference (see layer 2) |
+| `_check_required` (mandatory properties and child nodes) | Layer 5, `checks/bindings/rules.py` (`binding-missing-property`, `binding-missing-node`) |
+| Unknown `compatible` warning | Layer 5, `binding-unknown-compatible` |
+| `BindingSpec` / `BindingLookup` (contract with the database) | `checks/bindings/lookup.py`, which talks about schemas already processed by dt-schema instead of the raw YAML |
+| `parser.py`'s `check_compatible_format` | Layer 1 (§2.3.1) |
 
-De aquella reimplantación siguen en pie las dos cosas que había que conservar
-sí o sí: la resolución **exacta** del compatible y el trato de los `.dtsi`
-como fragmentos.
+Of that reimplementation, the two things that had to be kept no matter what
+are still standing: **exact** resolution of the compatible, and treating
+`.dtsi` files as fragments.

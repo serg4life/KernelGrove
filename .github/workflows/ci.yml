@@ -1,9 +1,9 @@
-# Lint y pruebas en cada push y cada pull request.
+# Lint and tests on every push and every pull request.
 #
-# No hay base de datos en CI (`database/bindings.db` no se versiona: son 70 MB
-# derivados de un checkout del kernel), así que las pruebas que la necesitan se
-# saltan solas — está previsto en cada una de ellas. Lo que sí corre entero es
-# el motor semántico, que no toca SQLite por diseño.
+# There is no database in CI (`database/bindings.db` is not versioned: it is
+# 70 MB derived from a kernel checkout), so the tests that need it skip
+# themselves — each of them is written for that. What does run in full is the
+# semantic engine, which does not touch SQLite by design.
 name: CI
 
 on:
@@ -23,8 +23,8 @@ jobs:
           cache: pip
 
       - name: Librerías nativas de Qt
-        # PySide6 enlaza con EGL aunque se use el backend `offscreen`, y la
-        # imagen de GitHub no las trae: sin esto, importar PySide6 falla.
+        # PySide6 links against EGL even with the `offscreen` backend, and
+        # GitHub's image does not ship it: without this, importing PySide6 fails.
         run: sudo apt-get update && sudo apt-get install -y libegl1
 
       - name: Instalar dependencias
@@ -37,8 +37,8 @@ jobs:
         run: ruff check .
 
       - name: Pruebas
-        # Sin pantalla: es el mismo modo con el que se puede usar la GUI en un
-        # contenedor.
+        # No display: the same mode the GUI can be used in inside a
+        # container.
         env:
           QT_QPA_PLATFORM: offscreen
         run: pytest -q

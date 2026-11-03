@@ -1,6 +1,6 @@
-# Motor semántico (dts_engine)
+# Semantic engine (dts_engine)
 
-> Detalle extraído de `CLAUDE.md`. El índice y las reglas transversales siguen allí.
+> Detail split out of `CLAUDE.md`. The index and the cross-cutting rules stay there.
 
 **3. Semantic engine (`kernelgrove/dts_engine/`) — no dependencies beyond `dt_model`.** Parses and validates device tree sources; the DB is *injected*, never imported, so `api` can depend on it without a cycle.
 - `parser.py` — `parse_dts_source(text)` scans the text character by character (not line by line, so multi-line properties work), tracking line/column and capturing every property. Returns a `ParseResult` with the tree plus syntax diagnostics (unbalanced braces, missing `;` — both after a property and after a node's `}` — and malformed node headers). `parse_dtsi_file` is the thin wrapper the socs ingestion uses.
@@ -46,6 +46,6 @@ Rules this engine must keep:
 
 Layer 1 keeps dropping as the merged view gets better: 10986 before the dt-schema work, 10079 after folding `&label` reopenings, 9161 once an `#include` written inside a node was merged inside that node, 9137 now that `/delete-node/`/`/delete-property/` are applied. Its errors stayed at 391 throughout, and layer 5 did not move at all when the deletions landed — which is the number that mattered there: pruning the tree could just as easily have *invented* «missing property» on something a board deliberately removes, and it did not. Layer 5's biggest group is `binding-unknown-compatible` (4930 INFO), which is expected — the kernel still has ~1000 bindings in the old `.txt` format that never became YAML, and a node whose compatible has no YAML binding is exactly what that INFO says.
 
-## Trampa
+## Trap
 
 - **An `#include` inside a node is merged inside that node.** `IncludeDirective.node_path` carries the path of the node that was open where the directive appeared (the main parser scan records it; the line-based `collect_includes` can't know it), and `IncludeResolver.resolve_tree` merges there. The Raspberry Pi 5 puts its whole RP1 inside a `dev@0` that way; merging it at the root left that node looking empty and produced "the binding requires `pci-ep-bus@1`".

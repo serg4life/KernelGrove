@@ -1,218 +1,221 @@
-# Empaquetado en Windows
+# Packaging on Windows
 
-## Construir
+## Build
 
 ```powershell
 pip install -e '.[packaging]'      # PyInstaller
 .\packaging\windows\build.ps1
 ```
 
-Resultado en `dist\kernelgrove\` — el ejecutable `kernelgrove.exe` con sus DLL al
-lado (`--onedir`, no `--onefile`, mismo motivo LGPL que en Linux). Probarlo:
+The result lands in `dist\kernelgrove\` — the `kernelgrove.exe` executable
+with its DLLs alongside (`--onedir`, not `--onefile`, for the same LGPL reason
+as on Linux). To try it:
 
 ```powershell
-$env:KERNELGROVE_DB_PATH='C:\ruta\a\bindings.db'; .\dist\kernelgrove\kernelgrove.exe
+$env:KERNELGROVE_DB_PATH='C:\path\to\bindings.db'; .\dist\kernelgrove\kernelgrove.exe
 ```
 
-**En una máquina Windows.** PyInstaller no hace cross-compiling: esto no se
-construye desde Linux. `windows-latest` de GitHub Actions vale.
+**On a Windows machine.** PyInstaller does not cross-compile: this cannot be
+built from Linux. GitHub Actions' `windows-latest` will do.
 
-## Instalador
+## Installer
 
 ```powershell
 .\packaging\windows\build_installer.ps1
 ```
 
-Deja `dist\kernelgrove-<versión>-win64-setup.exe`. Necesita Inno Setup 6.1 o
-posterior (`winget install --id JRSoftware.InnoSetup`) — 6.1 es la que trae
-la página de descarga que se usa abajo.
+It leaves `dist\kernelgrove-<version>-win64-setup.exe`. It needs Inno Setup
+6.1 or later (`winget install --id JRSoftware.InnoSetup`) — 6.1 is the first
+one with the download page used below.
 
-Inno Setup y no MSI/WiX: mismo resultado (menú Inicio, desinstalador,
-entrada en «Aplicaciones instaladas») con un script declarativo en vez de un
-proyecto.
+Inno Setup rather than MSI/WiX: same result (Start menu, uninstaller, an entry
+in «Installed apps») with a declarative script instead of a project.
 
-Instala **por usuario**, sin pedir administrador, en
-`%LOCALAPPDATA%\Programs\KernelGrove`. Es un aviso menos delante de alguien que
-solo quiere probar el programa, y evita el problema que en Linux obligó a
-buscar la base también en `~`: instalado en Archivos de programa, todo lo que
-el programa escribe junto a sí mismo necesitaría privilegios.
+It installs **per user**, without asking for administrator rights, into
+`%LOCALAPPDATA%\Programs\KernelGrove`. That is one prompt fewer in front of
+someone who just wants to try the program, and it avoids the problem that on
+Linux forced the database to be looked for in `~` as well: installed under
+Program Files, everything the program writes next to itself would need
+privileges.
 
-El instalador no pide aceptar ninguna licencia: Apache-2.0 no lo exige. Copia
-`LICENSE.txt` y `NOTICE.txt` junto al ejecutable, que es lo que sí exige.
+The installer does not ask anyone to accept a licence: Apache-2.0 does not
+require it. It copies `LICENSE.txt` and `NOTICE.txt` next to the executable,
+which is what the licence does require.
 
-### Actualizar desde DTstudio
+### Upgrading from DTstudio
 
-El programa se llamaba DTstudio hasta la 1.0b2. El `AppId` **no ha
-cambiado**, y eso es deliberado: es lo que hace que el instalador nuevo sea
-una actualización del anterior y no un segundo producto — una sola entrada
-en «Aplicaciones instaladas», que pasa a llamarse KernelGrove, y un solo
-desinstalador.
+The program was called DTstudio up to 1.0b2. The `AppId` **has not
+changed**, and that is deliberate: it is what makes the new installer an
+upgrade of the previous one and not a second product — a single entry in
+«Installed apps», which is renamed KernelGrove, and a single uninstaller.
 
-De ahí salen tres cosas que hay que atender a mano, porque Inno solo
-sobreescribe ficheros que se llaman igual:
+That leaves three things to handle by hand, because Inno only overwrites files
+that have the same name:
 
-- **La carpeta se queda como estaba** (`%LOCALAPPDATA%\Programs\DTstudio`).
-  `UsePreviousAppDir` se deja en su valor por omisión a propósito: forzar
-  `...\KernelGrove` dejaría la carpeta anterior entera de huérfana, unos
-  300 MB que nadie va a ir a borrar. El nombre de la carpeta no lo lee casi
-  nadie; el de la entrada de desinstalación sí, y ese sí cambia.
-- **El grupo del menú de inicio no se queda**: `UsePreviousGroup=no` fuerza
-  uno nuevo llamado KernelGrove, y `[InstallDelete]` borra el viejo con sus
-  dos accesos directos dentro. Eso es lo que el usuario mira.
-- **El ejecutable viejo se borra** (`[InstallDelete]`: `dtstudio.exe` y
-  `_internal\dtstudio`). Sin esa línea se quedaba al lado del nuevo,
-  arrancable desde su acceso directo, con su propia copia del paquete: dos
-  versiones instaladas a la vez, y la vieja buscando un `~/.dtstudio` que la
-  nueva ya se ha llevado.
+- **The folder stays as it was** (`%LOCALAPPDATA%\Programs\DTstudio`).
+  `UsePreviousAppDir` is left at its default on purpose: forcing
+  `...\KernelGrove` would orphan the whole previous folder, some 300 MB nobody
+  is going to delete. Hardly anyone reads the folder name; the uninstall
+  entry's name, they do, and that one does change.
+- **The Start menu group does not stay**: `UsePreviousGroup=no` forces a new
+  one called KernelGrove, and `[InstallDelete]` removes the old one with its
+  two shortcuts inside. That is what the user looks at.
+- **The old executable is deleted** (`[InstallDelete]`: `dtstudio.exe` and
+  `_internal\dtstudio`). Without that line it stayed next to the new one,
+  launchable from its own shortcut, with its own copy of the package: two
+  versions installed at once, and the old one looking for a `~/.dtstudio` the
+  new one had already moved away.
 
-Lo del usuario no lo toca el instalador y no hace falta que lo toque:
-`%USERPROFILE%\.dtstudio` y los ajustes de Qt
-bajo `HKCU\Software\DTstudio` los recoge el propio programa al arrancar
-(`kernelgrove/legacy.py`). Las herramientas descargadas viven en
-`{app}\tools`, que es la misma carpeta de siempre, así que siguen donde
-estaban y el ejecutable nuevo las encuentra sin hacer nada.
+The installer does not touch the user's data and does not need to:
+`%USERPROFILE%\.dtstudio` and the Qt settings under `HKCU\Software\DTstudio`
+are picked up by the program itself on start-up (`kernelgrove/legacy.py`).
+The downloaded tools live in `{app}\tools`, which is the same folder as
+always, so they stay where they were and the new executable finds them without
+doing anything.
 
-## `dtc` y `cpp`: por qué aquí sí se descargan
+## `dtc` and `cpp`: why they are downloaded here
 
-En Linux son paquetes de la distribución y el `.deb` se limita a
-recomendarlos (`Recommends`), porque `apt` los instala y los actualiza. En
-Windows no hay equivalente:
+On Linux they are distribution packages and the `.deb` merely recommends them
+(`Recommends`), because `apt` installs and updates them. Windows has no
+equivalent:
 
-- **`dtc`** no tiene distribución oficial para Windows. Lo más parecido es el
-  paquete de MSYS2 (`mingw-w64-x86_64-dtc`), que llega en un
-  `.pkg.tar.zst` y presupone tener MSYS2 instalado.
-- **El preprocesador** solo viene dentro de instaladores grandes (LLVM ronda
-  el giga instalado) o de un MinGW completo.
+- **`dtc`** has no official Windows distribution. The closest thing is the
+  MSYS2 package (`mingw-w64-x86_64-dtc`), which comes as a `.pkg.tar.zst` and
+  assumes MSYS2 is installed.
+- **The preprocessor** only comes inside large installers (LLVM is around a
+  gigabyte installed) or a full MinGW.
 
-Pedirle eso a alguien que acaba de instalar un editor de device trees es
-perderlo. Así que el instalador ofrece un componente opcional,
-**«Compilation tools»**, que las descarga y las deja en `{app}\tools`.
+Asking that of someone who has just installed a device tree editor is losing
+them. So the installer offers an optional component, **«Compilation tools»**,
+that downloads them and leaves them in `{app}\tools`.
 
-Cómo está montado, y por qué así:
+How it is put together, and why:
 
-- **Hosting estático, no una API** — igual que la base de datos
-  (`kernelgrove/db_download.py`): un `.zip` colgado en una *release* de GitHub
-  (o en un bucket) y su `sha256`. Nada que mantener corriendo.
-- **Se comprueba el `sha256`**, que es lo que hace el propio Inno al
-  descargar. Media descarga pesa lo mismo que una entera y un `dtc.exe`
-  truncado falla mucho más tarde y de forma mucho más confusa que ahí.
-- **Se descarga antes de instalar nada** (en `wpReady`), para que un fallo de
-  red no deje medio programa puesto.
-- **Se descomprime con el `tar.exe` de Windows** (bsdtar, presente desde la
-  1803, y abre `.zip`). Meter una librería de descompresión en el instalador
-  por dos ficheros sería una dependencia por nada. Si no está, lo dice y
-  sigue: el resto queda instalado.
-- **No se toca el `PATH`.** Es un cambio global del sistema por un programa
-  concreto, y encima no alcanzaría a un proceso ya lanzado. En su lugar
-  `api/toolchain._bundled_tools_dir` mira el `tools\` que hay junto al
-  ejecutable cuando está empaquetado — dos líneas, y funciona igual si
-  alguien copia ahí sus propios binarios a mano.
-- **El desinstalador se lleva `{app}\tools`** (`[UninstallDelete]`): no lo
-  puso `[Files]`, así que no lo conoce por sí solo. `%USERPROFILE%\.kernelgrove`
-  (base de datos, acuerdo aceptado) se queda: son datos del usuario.
+- **Static hosting, not an API** — same as the database
+  (`kernelgrove/db_download.py`): a `.zip` attached to a GitHub *release* (or
+  in a bucket) and its `sha256`. Nothing to keep running.
+- **The `sha256` is checked**, which is what Inno itself does when it
+  downloads. Half a download weighs the same as a whole one, and a truncated
+  `dtc.exe` fails much later and much more confusingly than there.
+- **It is downloaded before anything is installed** (in `wpReady`), so a
+  network failure does not leave half a program in place.
+- **It is unpacked with Windows' own `tar.exe`** (bsdtar, present since 1803,
+  and it opens `.zip`). Putting a decompression library into the installer for
+  two files would be a dependency for nothing. If it is not there, it says so
+  and carries on: the rest stays installed.
+- **The `PATH` is not touched.** It is a system-wide change for one particular
+  program, and on top of that it would not reach an already-running process.
+  Instead `api/toolchain._bundled_tools_dir` looks at the `tools\` next to the
+  executable when it is packaged — two lines, and it works the same if someone
+  copies their own binaries there by hand.
+- **The uninstaller takes `{app}\tools` with it** (`[UninstallDelete]`):
+  `[Files]` did not put it there, so it does not know about it on its own.
+  `%USERPROFILE%\.kernelgrove` (the database and other user state) stays: it
+  is user data.
 
-Sin el componente, o si falla la descarga, no pasa nada más que no poder
-compilar: la aplicación entera —editar, validar, generar overlays— es Python
-sobre la base de datos, y `toolchain.install_hint()` explica qué falta.
+Without the component, or if the download fails, nothing happens beyond not
+being able to compile: the whole application —editing, validating, generating
+overlays— is Python over the database, and `toolchain.install_hint()` explains
+what is missing.
 
-### Qué hay que publicar, y qué tiene que haber dentro
+### What has to be published, and what has to be inside it
 
-Las URL van **vacías en el repositorio**. Mientras lo estén, el componente no
-se compila siquiera y el instalador sale sin él. Se inyectan al construir:
+The URLs are **empty in the repository**. While they are, the component is not
+even compiled in and the installer ships without it. They are injected at
+build time.
 
-Van a una *release* de GitHub, que es el mismo hosting estático que ya usa
-la base de datos (`kernelgrove/db_download.py`) y no hay que mantener nada
-corriendo:
+They point at a GitHub *release*, the same static hosting the database
+already uses (`kernelgrove/db_download.py`), with nothing to keep running:
 
 ```powershell
 $base = 'https://github.com/serg4life/kernelgrove/releases/download/tools-v1'
 $env:KERNELGROVE_TOOLS_DTC_URL    = "$base/dtc-1.7.0-win64.zip"
-$env:KERNELGROVE_TOOLS_DTC_SHA256 = '<sha256 del zip>'
+$env:KERNELGROVE_TOOLS_DTC_SHA256 = '<sha256 of the zip>'
 $env:KERNELGROVE_TOOLS_CPP_URL    = "$base/clang-win64.zip"
-$env:KERNELGROVE_TOOLS_CPP_SHA256 = '<sha256 del zip>'
+$env:KERNELGROVE_TOOLS_CPP_SHA256 = '<sha256 of the zip>'
 .\packaging\windows\build_installer.ps1
 ```
 
-**Con la etiqueta fija, no con `/releases/latest/download/`.** La base sí usa
-`latest`, y puede porque va detrás de un manifiesto que dice el `sha256` del
-día; aquí el `sha256` está cocido dentro del instalador, así que un `latest`
-que se mueva rompería a la vez todos los instaladores ya publicados. Una
-*release* aparte para las herramientas (`tools-v1`) evita además tener que
-resubir los `.zip` cada vez que sale una versión del programa.
+**With the fixed tag, not with `/releases/latest/download/`.** The database
+does use `latest`, and it can because it sits behind a manifest stating the
+current `sha256`; here the `sha256` is baked into the installer, so a moving
+`latest` would break every installer already published at once. A separate
+*release* for the tools (`tools-v1`) also avoids re-uploading the `.zip`s
+every time a version of the program comes out.
 
-Cada `.zip` tiene que llevar, **en la raíz** y sin carpeta intermedia:
+Each `.zip` has to carry, **at its root** and with no intermediate folder:
 
-- el ejecutable (`dtc.exe`, `clang.exe`), porque se extrae tal cual a
-  `{app}\tools`, y
-- **su fichero de licencia** al lado (`COPYING` el de dtc, `LICENSE.txt` el
-  de LLVM). Conservar los avisos es una obligación de las dos licencias, y
-  así viaja con el binario y se va con él al desinstalar.
+- the executable (`dtc.exe`, `clang.exe`), because it is extracted as is into
+  `{app}\tools`, and
+- **its licence file** alongside (`COPYING` for dtc, `LICENSE.txt` for LLVM).
+  Keeping the notices is an obligation under both licences, and this way it
+  travels with the binary and leaves with it on uninstall.
 
-Para el preprocesador, el **`clang.exe`** de LLVM: es un único fichero que se
-basta solo, mientras que el `cpp.exe` de MinGW necesita su `cc1.exe` al lado.
-`toolchain.py` ya lo acepta como preprocesador (`CPP_CANDIDATES`) y
-`compile_overlay._cpp_command` ya le añade el `-E` que necesita.
+For the preprocessor, LLVM's **`clang.exe`**: it is a single self-sufficient
+file, whereas MinGW's `cpp.exe` needs its `cc1.exe` next to it. `toolchain.py`
+already accepts it as a preprocessor (`CPP_CANDIDATES`) and
+`compile_overlay._cpp_command` already adds the `-E` it needs.
 
-**Licencias.** Lo que cambia respecto a Linux no es que se descargue —eso ya
-pasa con `apt`— sino **de qué servidor salen los bits**: allí los sirve
-Debian y el distribuidor es Debian; aquí los servimos nosotros, así que la
-obligación es nuestra. Es una casilla, no un problema:
+**Licences.** What changes compared with Linux is not that they are
+downloaded —that already happens with `apt`— but **which server the bits come
+from**: there Debian serves them and Debian is the distributor; here we serve
+them, so the obligation is ours. It is a checkbox, not a problem:
 
-- `dtc` es **GPL-2.0-or-later**. Publica junto al `.zip` el tarball de la
-  fuente exacta de ese build y enlázalo desde la página de descargas, y mete
-  su `COPYING` dentro del `.zip`.
-- `clang`/LLVM es **Apache-2.0 con excepción LLVM**: basta con acompañar el
-  aviso (`LICENSE.txt` dentro del `.zip`).
+- `dtc` is **GPL-2.0-or-later**. Publish the tarball of the exact source of
+  that build next to the `.zip`, link it from the downloads page, and put its
+  `COPYING` inside the `.zip`.
+- `clang`/LLVM is **Apache-2.0 with the LLVM exception**: shipping the notice
+  (`LICENSE.txt` inside the `.zip`) is enough.
 
-**La aplicación no se contamina**: KernelGrove los lanza como procesos aparte
-(`subprocess`), no enlaza nada de ellos, y distribuirlos juntos es mera
-agregación. Es menos compromiso del que ya se asume con Qt, que es LGPLv3 y
-sí va dentro del bundle. Ambos están declarados en «Ayuda → Licencias»
-(`src/kernelgrove/gui/LICENSES.md`), en su propio apartado, dejando dicho que
-no forman parte del programa.
+**The application is not affected**: KernelGrove launches them as separate
+processes (`subprocess`), links nothing of theirs, and distributing them
+together is mere aggregation. That is less of a commitment than the one
+already taken on with Qt, which is LGPLv3 and does go inside the bundle. Both
+are declared in «Help → Licenses» (`src/kernelgrove/gui/LICENSES.md`), in a
+section of their own that states they are not part of the program.
 
-## Firma de código
+## Code signing
 
-Sin firmar, tanto el `.exe` como el instalador disparan SmartScreen
-(«Windows protegió su PC»). Un certificado estándar (~100–400 USD/año)
-quita el aviso solo después de acumular reputación; uno EV lo quita desde el
-primer día. Es aplazable hasta que haya distribución real a terceros
-(proyectos open source pueden pedir firma gratuita, p. ej. SignPath). Si se compra, se firma el `.exe` interno **y**
-el instalador, con `signtool sign /fd sha256 /tr <timestamp> …` como paso
-posterior a cada script.
+Unsigned, both the `.exe` and the installer trigger SmartScreen («Windows
+protected your PC»). A standard certificate (~100–400 USD/year) removes the
+warning only after building up reputation; an EV one removes it from day one.
+It can wait until there is real distribution to third parties (open-source
+projects can apply for free signing, e.g. SignPath). If one is bought, sign
+the inner `.exe` **and** the installer, with
+`signtool sign /fd sha256 /tr <timestamp> …` as a step after each script.
 
-## Qué NO lleva dentro
+## What it does NOT carry
 
-Lo mismo que en Linux, y por lo mismo (ver `packaging/linux/README.md`):
-`bindings.db` (la aplicación la descarga sola la primera vez que arranca sin
-ella, a `%USERPROFILE%\.kernelgrove\bindings.db`), `kernelgrove.db_manager`,
-y `dtschema`/`pyyaml`. Antes de publicar hay que comprobar la URL del
-manifiesto de la base (`kernelgrove/db_download.py`).
+The same as on Linux, and for the same reasons (see
+`packaging/linux/README.md`): `bindings.db` (the application downloads it by
+itself the first time it starts without one, to
+`%USERPROFILE%\.kernelgrove\bindings.db`), `kernelgrove.db_manager`, and
+`dtschema`/`pyyaml`. Before publishing, check the database manifest URL
+(`kernelgrove/db_download.py`).
 
-## El icono
+## The icon
 
-`kernelgrove.ico` se generó del símbolo de la marca
-(`src/kernelgrove/gui/brand/logo-icon.svg`) con siete tamaños dentro
-(16…256), que es lo que Windows pide para que se vea bien en la barra de
-tareas y en Explorer:
+`kernelgrove.ico` was generated from the brand mark
+(`src/kernelgrove/gui/brand/logo-icon.svg`) with seven sizes inside (16…256),
+which is what Windows asks for to look right in the taskbar and in Explorer:
 
 ```
-python scripts/build_icon.py            # rasteriza los siete y llama a convert
+python scripts/build_icon.py            # rasterizes the seven and calls convert
 ```
 
-Cada tamaño se rasteriza **por separado** desde el SVG con el mismo Qt que
-dibuja el logotipo en la aplicación, en vez de reducir un PNG de 256: a 16 px
-un brote reescalado se emborrona, y así el trazo cae donde debe. El morado que
-sale es el del fichero (`#8b5cf6`), no el de la piel activa — la barra de
-tareas no dice de qué color es su fondo, y ese aguanta los dos (4,2:1 sobre
-blanco, 4,4:1 sobre negro).
+Each size is rasterized **separately** from the SVG with the same Qt that
+draws the logo in the application, instead of shrinking a 256 PNG: at 16 px a
+rescaled sprout blurs, and this way the stroke lands where it should. The
+purple that comes out is the file's own (`#8b5cf6`), not the active skin's —
+the taskbar does not say what colour its background is, and that one holds up
+on both (4.2:1 on white, 4.4:1 on black).
 
-A diferencia de Linux, aquí el icono de la ventana **sí** sale del `.exe`
-(no hay `.desktop` de por medio), así que basta con el `icon=` del `.spec`.
+Unlike Linux, here the window icon **does** come from the `.exe` (there is no
+`.desktop` in between), so the `.spec`'s `icon=` is enough.
 
-## Pendiente
+## Pending
 
-- **CI**: `windows-latest` en un `release.yml` con matrix por SO, en vez de
-  builds manuales — mismo pendiente que en Linux.
-- **ARM64**: PyInstaller construye para la máquina donde corre; haría falta
-  un runner Windows ARM64 y un instalador aparte.
+- **CI**: `windows-latest` in a `release.yml` with a per-OS matrix, instead of
+  manual builds — the same pending item as on Linux.
+- **ARM64**: PyInstaller builds for the machine it runs on; it would need a
+  Windows ARM64 runner and a separate installer.

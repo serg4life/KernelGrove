@@ -1,9 +1,9 @@
 # Changelog
 
-Una sección por versión publicada, en inglés: `scripts/release_notes.sh` copia
-la de la etiqueta que le pases al cuerpo de la release de GitHub, y debajo pega
-la tabla de assets con sus SHA-256. Escribe aquí lo que cambia de una beta a la
-siguiente y nada más — la tabla la genera el script.
+One section per published version: `scripts/release_notes.sh` copies the
+section for the tag you pass it into the body of the GitHub release, and pastes
+the asset table with their SHA-256 below it. Write here what changes from one
+beta to the next and nothing else — the script generates the table.
 
 ## Unreleased
 
