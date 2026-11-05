@@ -30,7 +30,9 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          # The `ingest` extra (pyyaml, dtschema) is build-time only for the app,
+          # but the ingestion tests import `db_manager`, which needs it.
+          pip install -e '.[ingest]'
           pip install ruff pytest
 
       - name: Lint

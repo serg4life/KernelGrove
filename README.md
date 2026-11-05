@@ -31,6 +31,9 @@ as a graph, and helps you write, validate and compile overlays.
 
 Download the latest `.deb` (Linux x86_64) or Windows installer from the
 [releases page](https://github.com/serg4life/kernelgrove/releases).
+Versions 1.0b1–1.0b3 were published before the source was opened; their
+installers and database are kept, archived, in
+[serg4life/kernelgrove-releases](https://github.com/serg4life/kernelgrove-releases/releases).
 
 ```bash
 sudo apt install ./kernelgrove_*.deb

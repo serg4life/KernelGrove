@@ -25,6 +25,10 @@ beta to the next and nothing else — the script generates the table.
 
 ## v1.0b3
 
+The binaries of 1.0b1–1.0b3 are published in the archived
+[serg4life/kernelgrove-releases](https://github.com/serg4life/kernelgrove-releases/releases)
+repository.
+
 ### Added
 
 - **`/delete-node/` and `/delete-property/` are applied.** They were parsed and
